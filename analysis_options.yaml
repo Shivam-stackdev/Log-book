@@ -1,0 +1,35 @@
+include: package:flutter_lints/analysis_options.yaml
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+  errors:
+    invalid_annotation_target: ignore
+
+linter:
+  rules:
+    - always_declare_return_types
+    - cancel_subscriptions
+    - close_sinks
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_locals
+    - use_key_in_widget_constructors
+    - prefer_relative_imports
+    - avoid_print
+    - await_only_futures
+    - empty_catches
+    - no_duplicate_case_values
+    - prefer_is_empty
+    - prefer_is_not_empty
+    - prefer_iterable_whereType
+    - unawaited_futures
+    - unnecessary_brace_in_string_interps
+    - unnecessary_const
+    - unnecessary_new
+    - unnecessary_null_aware_assignments
+    - unnecessary_nullable_for_final_variable_declarations
+    - unnecessary_string_interpolations
+    - unnecessary_this
+    - use_rethrow_when_possible
