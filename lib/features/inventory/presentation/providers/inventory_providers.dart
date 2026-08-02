@@ -6,8 +6,6 @@ import 'package:army_mess_inventory/features/inventory/domain/entities/item_enti
 import 'package:army_mess_inventory/features/inventory/domain/entities/officer_entity.dart';
 import 'package:army_mess_inventory/features/inventory/domain/repositories/inventory_repository.dart';
 import 'package:army_mess_inventory/features/inventory/domain/repositories/officer_repository.dart';
-import 'package:army_mess_inventory/features/inventory/domain/usecases/get_items.dart';
-import 'package:army_mess_inventory/features/inventory/domain/usecases/add_item.dart';
 import 'package:army_mess_inventory/features/inventory/domain/usecases/get_purchase_suggestions.dart';
 import 'package:army_mess_inventory/features/inventory/domain/usecases/calculate_cost_per_officer.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/purchase_suggestion_entity.dart';
