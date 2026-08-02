@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/providers/inventory_providers.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/stock_entry_entity.dart';
-import 'package:army_mess_inventory/features/inventory/domain/entities/deduction_entry_entity.dart';
 import 'package:intl/intl.dart';
 
 class HistoryScreen extends ConsumerWidget {
