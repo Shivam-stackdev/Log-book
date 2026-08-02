@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:army_mess_inventory/core/theme/app_theme.dart';
 import 'package:army_mess_inventory/core/utils/app_router.dart';
 
