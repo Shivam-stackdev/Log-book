@@ -1,3 +1,4 @@
+import 'package:army_mess_inventory/features/inventory/domain/entities/deduction_entry_entity.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/providers/inventory_providers.dart';
