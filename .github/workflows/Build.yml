@@ -41,8 +41,7 @@ jobs:
         run: flutter analyze|| true
 
       - name: Build APK
-        run: flutter build apk --release background
-       --release--stackrace
+        run: flutter build apk --release --stacktrace
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
