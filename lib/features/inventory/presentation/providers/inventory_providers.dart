@@ -1,4 +1,4 @@
-import 'package:flutter_riverpod/riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:army_mess_inventory/core/utils/database_helper.dart';
 import 'package:army_mess_inventory/features/inventory/data/repositories/inventory_repository_impl.dart';
 import 'package:army_mess_inventory/features/inventory/data/repositories/officer_repository_impl.dart';
