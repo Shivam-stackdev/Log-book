@@ -8,6 +8,7 @@ class ItemModel extends ItemEntity {
     required super.currentStock,
     required super.reorderLevel,
     required super.category,
+    super.unitCost = 0,
   });
 
   factory ItemModel.fromMap(Map<String, dynamic> map) {
@@ -15,9 +16,10 @@ class ItemModel extends ItemEntity {
       id: map['id'],
       name: map['name'],
       unit: map['unit'],
-      currentStock: map['currentStock'].toDouble(),
-      reorderLevel: map['reorderLevel'].toDouble(),
-      category: map['category'],
+      currentStock: (map['currentStock'] ?? 0).toDouble(),
+      reorderLevel: (map['reorderLevel'] ?? 0).toDouble(),
+      category: map['category'] ?? '',
+      unitCost: (map['unitCost'] ?? 0).toDouble(),
     );
   }
 
@@ -29,6 +31,7 @@ class ItemModel extends ItemEntity {
       'currentStock': currentStock,
       'reorderLevel': reorderLevel,
       'category': category,
+      'unitCost': unitCost,
     };
   }
 
@@ -40,6 +43,7 @@ class ItemModel extends ItemEntity {
       currentStock: entity.currentStock,
       reorderLevel: entity.reorderLevel,
       category: entity.category,
+      unitCost: entity.unitCost,
     );
   }
 }

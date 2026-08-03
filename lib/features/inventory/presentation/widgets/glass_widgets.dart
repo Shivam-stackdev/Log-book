@@ -19,22 +19,34 @@ class GlassContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(opacity),
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.2),
-            ),
-          ),
-          child: child,
+      child: blur > 0
+          ? BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+              child: _buildContent(isDark),
+            )
+          : _buildContent(isDark),
+    );
+  }
+
+  Widget _buildContent(bool isDark) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.white.withValues(alpha: opacity),
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.white.withValues(alpha: 0.2),
         ),
       ),
+      child: child,
     );
   }
 }
@@ -42,24 +54,37 @@ class GlassContainer extends StatelessWidget {
 class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final List<Widget>? actions;
+  final bool showBack;
 
-  const GlassAppBar({super.key, required this.title, this.actions});
+  const GlassAppBar({
+    super.key,
+    required this.title,
+    this.actions,
+    this.showBack = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: AppBar(
           title: Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: isDark ? Colors.white : Colors.black87,
             ),
           ),
-          backgroundColor: Colors.white.withOpacity(0.7),
+          backgroundColor: isDark
+              ? const Color(0xFF1A1A2E).withValues(alpha: 0.8)
+              : Colors.white.withValues(alpha: 0.7),
           elevation: 0,
+          iconTheme: IconThemeData(
+            color: isDark ? Colors.white : Colors.black87,
+          ),
           actions: actions,
         ),
       ),
