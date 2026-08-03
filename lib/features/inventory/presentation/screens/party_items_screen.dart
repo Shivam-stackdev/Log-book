@@ -79,7 +79,7 @@ class _PartyItemsScreenState extends ConsumerState<PartyItemsScreen> {
         Expanded(flex: 1, child: Text('${item.quantity} ${item.unit}')),
         Expanded(flex: 1, child: Text('Rs. ${item.rate}', textAlign: TextAlign.right)),
         Expanded(flex: 1, child: Text('Rs. ${item.amount}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w500))),
-      ]))],
+      ]))).toList()],
     ])));
   }
 

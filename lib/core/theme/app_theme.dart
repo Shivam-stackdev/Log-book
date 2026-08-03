@@ -53,7 +53,7 @@ class AppTheme {
             color: AppColors.onPrimary,
           ),
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           elevation: 1,
           shadowColor: AppColors.cardShadow,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

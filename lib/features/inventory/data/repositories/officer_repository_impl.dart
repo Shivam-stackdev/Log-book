@@ -31,12 +31,12 @@ class OfficerRepositoryImpl implements OfficerRepository {
   Future<Either<AppException, void>> addOfficer(OfficerEntity officer) async {
     try {
       final db = await dbHelper.database;
-      await db.insert('officers', OfficerModel.fromMap({
+      await db.insert('officers', {
         'id': officer.id,
         'name': officer.name,
         'rank': officer.rank,
         'personalNumber': officer.personalNumber,
-      }));
+      });
       AppLogger.i('OfficerRepo', 'Added officer: ${officer.name}');
       return const Right(null);
     } catch (e) {
@@ -49,12 +49,12 @@ class OfficerRepositoryImpl implements OfficerRepository {
   Future<Either<AppException, void>> updateOfficer(OfficerEntity officer) async {
     try {
       final db = await dbHelper.database;
-      await db.update('officers', OfficerModel.fromMap({
+      await db.update('officers', {
         'id': officer.id,
         'name': officer.name,
         'rank': officer.rank,
         'personalNumber': officer.personalNumber,
-      }), where: 'id = ?', whereArgs: [officer.id]);
+      }, where: 'id = ?', whereArgs: [officer.id]);
       return const Right(null);
     } catch (e) {
       AppLogger.e('OfficerRepo', 'Failed to update officer', e);
@@ -78,13 +78,13 @@ class OfficerRepositoryImpl implements OfficerRepository {
   Future<Either<AppException, void>> addPartyEntry(PartyEntryEntity entry) async {
     try {
       final db = await dbHelper.database;
-      await db.insert('party_entries', PartyEntryModel.fromMap({
+      await db.insert('party_entries', {
         'id': entry.id,
         'officerId': entry.officerId,
         'date': entry.date.toIso8601String(),
         'amount': entry.amount,
         'description': entry.description,
-      }));
+      });
       return const Right(null);
     } catch (e) {
       AppLogger.e('OfficerRepo', 'Failed to add party entry', e);
@@ -144,7 +144,7 @@ class OfficerRepositoryImpl implements OfficerRepository {
   Future<Either<AppException, void>> addPartyItem(PartyItemEntity item) async {
     try {
       final db = await dbHelper.database;
-      await db.insert('party_items', PartyItemModel.fromMap({
+      await db.insert('party_items', {
         'id': item.id,
         'partyEntryId': item.partyEntryId,
         'itemName': item.itemName,
@@ -152,7 +152,7 @@ class OfficerRepositoryImpl implements OfficerRepository {
         'rate': item.rate,
         'amount': item.amount,
         'unit': item.unit,
-      }));
+      });
       AppLogger.i('OfficerRepo', 'Added party item: ${item.itemName}');
       return const Right(null);
     } catch (e) {

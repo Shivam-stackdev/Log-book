@@ -23,7 +23,7 @@ class StockCalculator {
   static double calculateRemaining(double currentStock, double deductionQty) {
     final remaining = currentStock - deductionQty;
     if (remaining < 0) {
-      throw const StockException(
+      throw StockException(
         message: 'Cannot deduct more than available stock',
         details: 'Available: $currentStock, Requested: $deductionQty',
       );
