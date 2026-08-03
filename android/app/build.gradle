@@ -53,6 +53,10 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.debug
+            // Flutter enables R8 for release builds; these rules keep it from
+            // failing on the optional ML Kit language models that are not
+            // bundled (only TextRecognitionScript.latin is used).
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
