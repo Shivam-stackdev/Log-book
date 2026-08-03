@@ -34,8 +34,8 @@ final orderChangeProvider = ChangeNotifierProvider((ref) {
 
 final dashboardChangeProvider = ChangeNotifierProvider((ref) {
   return DashboardProvider(
-    inventoryProvider: ref.watch(inventoryChangeProvider),
-    transactionProvider: ref.watch(transactionChangeProvider),
+    inventoryProvider: ref.read(inventoryChangeProvider),
+    transactionProvider: ref.read(transactionChangeProvider),
   );
 });
 

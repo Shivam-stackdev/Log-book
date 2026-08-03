@@ -2,8 +2,8 @@
 // *and* by every Flutter plugin module. Declared before any sub-project is
 // evaluated so `android/app/build.gradle` can read it too.
 ext {
-    sharedCompileSdk = 36
-    sharedTargetSdk = 36
+    sharedCompileSdk = 35
+    sharedTargetSdk = 35
     sharedMinSdk = 24
 }
 allprojects {
