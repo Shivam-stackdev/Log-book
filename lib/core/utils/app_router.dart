@@ -8,7 +8,8 @@ import 'package:army_mess_inventory/features/inventory/presentation/screens/repo
 import 'package:army_mess_inventory/features/inventory/presentation/screens/history_screen.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/screens/cost_analysis_screen.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/screens/purchase_suggestions_screen.dart';
-import 'package:army_mess_inventory/features/inventory/presentation/screens/backup_restore_screen.dart';
+import 'package:army_mess_inventory/features/inventory/presentation/screens/party_items_screen.dart';
+import 'package:army_mess_inventory/features/inventory/presentation/screens/settings_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -28,6 +29,16 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/officers',
       builder: (context, state) => const OfficerListScreen(),
+    ),
+    GoRoute(
+      path: '/party-items',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>;
+        return PartyItemsScreen(
+          officerId: extra['officerId'] as String,
+          officerName: extra['officerName'] as String,
+        );
+      },
     ),
     GoRoute(
       path: '/ocr',
@@ -50,8 +61,8 @@ final appRouter = GoRouter(
       builder: (context, state) => const PurchaseSuggestionsScreen(),
     ),
     GoRoute(
-      path: '/backup',
-      builder: (context, state) => const BackupRestoreScreen(),
+      path: '/settings',
+      builder: (context, state) => const SettingsScreen(),
     ),
   ],
 );

@@ -5,6 +5,7 @@ import 'package:army_mess_inventory/features/inventory/data/models/officer_model
 import 'package:army_mess_inventory/features/inventory/data/models/party_entry_model.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/officer_entity.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/party_entry_entity.dart';
+import 'package:army_mess_inventory/features/inventory/domain/entities/party_items_entity.dart';
 import 'package:army_mess_inventory/features/inventory/domain/repositories/officer_repository.dart';
 
 class OfficerRepositoryImpl implements OfficerRepository {
@@ -104,6 +105,21 @@ class OfficerRepositoryImpl implements OfficerRepository {
         [start.toIso8601String(), end.toIso8601String()],
       );
       return Right(result.first['total'] as double? ?? 0.0);
+    } catch (e) {
+      return Left(DatabaseFailure());
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<PartyItemEntity>>> getPartyItems(String partyEntryId) async {
+    try {
+      final db = await dbHelper.database;
+      final result = await db.query(
+        'party_items',
+        where: 'partyEntryId = ?',
+        whereArgs: [partyEntryId],
+      );
+      return Right(result.map((json) => PartyItemEntity.fromMap(json)).toList());
     } catch (e) {
       return Left(DatabaseFailure());
     }

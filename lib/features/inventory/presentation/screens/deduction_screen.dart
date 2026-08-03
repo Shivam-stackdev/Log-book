@@ -1,6 +1,6 @@
-import 'package:army_mess_inventory/features/inventory/domain/entities/deduction_entry_entity.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:army_mess_inventory/features/inventory/domain/entities/deduction_entry_entity.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/providers/inventory_providers.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/item_entity.dart';
@@ -17,6 +17,13 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
   ItemEntity? _selectedItem;
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _reasonController = TextEditingController(text: 'Daily Messing');
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    _reasonController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -118,14 +125,21 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
     final repository = ref.read(inventoryRepositoryProvider);
     await repository.addDeductionEntry(entry);
     
-    // Refresh inventory
-    ref.read(inventoryListProvider.notifier).loadItems();
+    // Refresh inventory without navigating away
+    await ref.read(inventoryListProvider.notifier).loadItems();
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Deduction recorded successfully')),
       );
-      Navigator.pop(context);
+      // Clear form for next entry instead of closing the screen
+      _quantityController.clear();
+      _reasonController.text = 'Daily Messing';
+      setState(() {
+        _selectedItem = null;
+      });
     }
   }
 }
+
+

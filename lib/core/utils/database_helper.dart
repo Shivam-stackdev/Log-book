@@ -19,8 +19,9 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -30,6 +31,7 @@ class DatabaseHelper {
     const doubleType = 'REAL NOT NULL';
     const intType = 'INTEGER NOT NULL';
 
+    // Items table
     await db.execute('''
       CREATE TABLE items (
         id $idType,
@@ -41,6 +43,7 @@ class DatabaseHelper {
       )
     ''');
 
+    // Stock entries table
     await db.execute('''
       CREATE TABLE stock_entries (
         id $idType,
@@ -53,6 +56,7 @@ class DatabaseHelper {
       )
     ''');
 
+    // Deduction entries table
     await db.execute('''
       CREATE TABLE deduction_entries (
         id $idType,
@@ -64,6 +68,7 @@ class DatabaseHelper {
       )
     ''');
 
+    // Officers table
     await db.execute('''
       CREATE TABLE officers (
         id $idType,
@@ -73,6 +78,7 @@ class DatabaseHelper {
       )
     ''');
 
+    // Party entries table
     await db.execute('''
       CREATE TABLE party_entries (
         id $idType,
@@ -83,7 +89,22 @@ class DatabaseHelper {
         FOREIGN KEY (officerId) REFERENCES officers (id)
       )
     ''');
-    
+
+    // Party items table - stores individual items for each party entry
+    await db.execute('''
+      CREATE TABLE party_items (
+        id $idType,
+        partyEntryId $textType,
+        itemName $textType,
+        quantity $doubleType,
+        rate $doubleType,
+        amount $doubleType,
+        unit $textType,
+        FOREIGN KEY (partyEntryId) REFERENCES party_entries (id)
+      )
+    ''');
+
+    // Purchase records table
     await db.execute('''
       CREATE TABLE purchase_records (
         id $idType,
@@ -93,10 +114,70 @@ class DatabaseHelper {
         ocrText $textType
       )
     ''');
+
+    // Settings table for app configuration
+    await db.execute('''
+      CREATE TABLE settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
+
+    // Insert default settings
+    await db.insert('settings', {'key': 'language', 'value': 'en'});
+    await db.insert('settings', {'key': 'ai_api_key', 'value': ''});
+    await db.insert('settings', {'key': 'ai_enabled', 'value': 'false'});
   }
 
-  Future close() async {
-    final db = await instance.database;
-    db.close();
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Add party_items table
+      await db.execute('''
+        CREATE TABLE party_items (
+          id TEXT PRIMARY KEY,
+          partyEntryId TEXT NOT NULL,
+          itemName TEXT NOT NULL,
+          quantity REAL NOT NULL,
+          rate REAL NOT NULL,
+          amount REAL NOT NULL,
+          unit TEXT NOT NULL,
+          FOREIGN KEY (partyEntryId) REFERENCES party_entries (id)
+        )
+      ''');
+
+      // Add settings table
+      await db.execute('''
+        CREATE TABLE settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        )
+      ''');
+
+      // Insert default settings
+      await db.insert('settings', {'key': 'language', 'value': 'en'});
+      await db.insert('settings', {'key': 'ai_api_key', 'value': ''});
+      await db.insert('settings', {'key': 'ai_enabled', 'value': 'false'});
+    }
+  }
+
+  Future<Map<String, String>> getAllSettings() async {
+    final db = await database;
+    final result = await db.query('settings');
+    return {for (var row in result) row['key'] as String: row['value'] as String};
+  }
+
+  Future<void> updateSetting(String key, String value) async {
+    final db = await database;
+    await db.insert(
+      'settings',
+      {'key': key, 'value': value},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> close() async {
+    final db = await database;
+    await db.close();
+    _database = null;
   }
 }

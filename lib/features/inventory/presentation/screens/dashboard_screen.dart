@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'dart:ui';
 import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -10,7 +9,6 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
       appBar: const GlassAppBar(title: 'Army Mess Inventory'),
       body: Container(
         decoration: BoxDecoration(
@@ -24,28 +22,26 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 30),
-                _buildStatsGrid(),
-                const SizedBox(height: 30),
-                const Text(
-                  'Quick Actions',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(),
+              const SizedBox(height: 24),
+              _buildStatsGrid(),
+              const SizedBox(height: 24),
+              const Text(
+                'Quick Actions',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
                 ),
-                const SizedBox(height: 15),
-                _buildActionGrid(context),
-              ],
-            ),
+              ),
+              const SizedBox(height: 15),
+              _buildActionGrid(context),
+            ],
           ),
         ),
       ),
@@ -81,8 +77,8 @@ class DashboardScreen extends ConsumerWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
-      crossAxisSpacing: 15,
-      mainAxisSpacing: 15,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
       childAspectRatio: 1.5,
       children: [
         _buildStatCard('Total Items', '124', Icons.inventory, Colors.blue),
@@ -130,8 +126,8 @@ class DashboardScreen extends ConsumerWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
-      crossAxisSpacing: 15,
-      mainAxisSpacing: 15,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
       children: [
         _buildActionCard(
           context,
@@ -167,57 +163,56 @@ class DashboardScreen extends ConsumerWidget {
 
   Widget _buildActionCard(
       BuildContext context, String title, String subtitle, IconData icon, String route) {
-    return InkWell(
-      onTap: () => context.push(route),
-      child: GlassContainer(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 40, color: Colors.green.shade700),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => context.push(route),
+        child: GlassContainer(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 40, color: Colors.green.shade700),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 10,
-                color: Colors.black54,
+              const SizedBox(height: 5),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Colors.black54,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildBottomNav(BuildContext context) {
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: NavigationBar(
-          backgroundColor: Colors.white.withOpacity(0.7),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.dashboard), label: 'Home'),
-            NavigationDestination(icon: Icon(Icons.analytics), label: 'Reports'),
-            NavigationDestination(icon: Icon(Icons.history), label: 'History'),
-            NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
-          ],
-          onDestinationSelected: (index) {
-            if (index == 1) context.push('/reports');
-            if (index == 2) context.push('/history');
-            if (index == 3) context.push('/backup');
-          },
-        ),
-      ),
+    return NavigationBar(
+      backgroundColor: Colors.white.withOpacity(0.9),
+      destinations: const [
+        NavigationDestination(icon: Icon(Icons.dashboard), label: 'Home'),
+        NavigationDestination(icon: Icon(Icons.analytics), label: 'Reports'),
+        NavigationDestination(icon: Icon(Icons.history), label: 'History'),
+        NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
+      ],
+      onDestinationSelected: (index) {
+        if (index == 1) context.push('/reports');
+        if (index == 2) context.push('/history');
+        if (index == 3) context.push('/settings');
+      },
     );
   }
 }

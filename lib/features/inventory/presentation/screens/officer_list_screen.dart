@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/providers/inventory_providers.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/officer_entity.dart';
 import 'package:uuid/uuid.dart';
 
-class OfficerListScreen extends ConsumerWidget {
+class OfficerListScreen extends ConsumerStatefulWidget {
   const OfficerListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OfficerListScreen> createState() => _OfficerListScreenState();
+}
+
+class _OfficerListScreenState extends ConsumerState<OfficerListScreen> {
+  @override
+  Widget build(BuildContext context) {
     final officersAsync = ref.watch(officerListProvider);
 
     return Scaffold(
@@ -18,14 +24,34 @@ class OfficerListScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.person_add),
-            onPressed: () => _showAddOfficerDialog(context, ref),
+            onPressed: () => _showAddOfficerDialog(context),
           ),
         ],
       ),
       body: officersAsync.when(
         data: (officers) {
           if (officers.isEmpty) {
-            return const Center(child: Text('No officers registered'));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.people_outline, size: 60, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  const Text('No officers registered', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddOfficerDialog(context),
+                    icon: const Icon(Icons.person_add),
+                    label: const Text('Add Officer'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade700,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+            );
           }
           return ListView.builder(
             padding: const EdgeInsets.all(16),
@@ -33,13 +59,29 @@ class OfficerListScreen extends ConsumerWidget {
             itemBuilder: (context, index) {
               final officer = officers[index];
               return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.person)),
-                  title: Text('${officer.rank} ${officer.name}'),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.purple.shade100,
+                    child: Icon(Icons.person, color: Colors.purple.shade700),
+                  ),
+                  title: Text(
+                    '${officer.rank} ${officer.name}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   subtitle: Text('PN: ${officer.personalNumber}'),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: const Icon(Icons.chevron_right, color: Colors.grey),
                   onTap: () {
-                    // Navigate to officer details/party entries
+                    context.push(
+                      '/party-items',
+                      extra: {
+                        'officerId': officer.id,
+                        'officerName': '${officer.rank} ${officer.name}',
+                      },
+                    );
                   },
                 ),
               );
@@ -52,7 +94,7 @@ class OfficerListScreen extends ConsumerWidget {
     );
   }
 
-  void _showAddOfficerDialog(BuildContext context, WidgetRef ref) {
+  void _showAddOfficerDialog(BuildContext context) {
     final nameController = TextEditingController();
     final rankController = TextEditingController();
     final pnController = TextEditingController();
@@ -64,9 +106,20 @@ class OfficerListScreen extends ConsumerWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: rankController, decoration: const InputDecoration(labelText: 'Rank')),
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name')),
-            TextField(controller: pnController, decoration: const InputDecoration(labelText: 'Personal Number')),
+            TextField(
+              controller: rankController,
+              decoration: const InputDecoration(labelText: 'Rank'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Name'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: pnController,
+              decoration: const InputDecoration(labelText: 'Personal Number'),
+            ),
           ],
         ),
         actions: [

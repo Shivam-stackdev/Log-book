@@ -26,29 +26,29 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
   List<BillItem> _extractedItems = [];
   final OcrService _ocrService = OcrService();
   
-  // Controllers for the table to avoid laggy setState on every keystroke
+  // Controllers for the editable table
   final List<TextEditingController> _nameControllers = [];
   final List<TextEditingController> _qtyControllers = [];
   final List<TextEditingController> _rateControllers = [];
+  final List<TextEditingController> _unitControllers = [];
 
   @override
   void dispose() {
     _ocrService.dispose();
-    for (var c in _nameControllers) {
-      c.dispose();
-    }
-    for (var c in _qtyControllers) {
-      c.dispose();
-    }
-    for (var c in _rateControllers) {
-      c.dispose();
-    }
+    for (var c in _nameControllers) c.dispose();
+    for (var c in _qtyControllers) c.dispose();
+    for (var c in _rateControllers) c.dispose();
+    for (var c in _unitControllers) c.dispose();
     super.dispose();
   }
 
   Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source);
+    final pickedFile = await picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 1200,
+    );
 
     if (pickedFile != null) {
       setState(() {
@@ -60,24 +60,21 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
         final items = await _ocrService.processImage(pickedFile.path);
         
         // Clear old controllers
-        for (var c in _nameControllers) {
-          c.dispose();
-        }
-        for (var c in _qtyControllers) {
-          c.dispose();
-        }
-        for (var c in _rateControllers) {
-          c.dispose();
-        }
+        for (var c in _nameControllers) c.dispose();
+        for (var c in _qtyControllers) c.dispose();
+        for (var c in _rateControllers) c.dispose();
+        for (var c in _unitControllers) c.dispose();
         _nameControllers.clear();
         _qtyControllers.clear();
         _rateControllers.clear();
+        _unitControllers.clear();
 
         // Create new controllers
         for (var item in items) {
           _nameControllers.add(TextEditingController(text: item.name));
           _qtyControllers.add(TextEditingController(text: item.quantity.toString()));
           _rateControllers.add(TextEditingController(text: item.rate.toString()));
+          _unitControllers.add(TextEditingController(text: item.unit));
         }
 
         setState(() {
@@ -109,7 +106,10 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
                   children: [
                     const Icon(Icons.receipt_long, size: 80, color: Colors.grey),
                     const SizedBox(height: 20),
-                    const Text('No bill selected', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                    const Text(
+                      'Scan a bill to extract items automatically',
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
                     const SizedBox(height: 30),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -118,12 +118,20 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
                           onPressed: () => _pickImage(ImageSource.camera),
                           icon: const Icon(Icons.camera_alt),
                           label: const Text('Camera'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
                         ),
-                        const SizedBox(width: 20),
+                        const SizedBox(width: 16),
                         ElevatedButton.icon(
                           onPressed: () => _pickImage(ImageSource.gallery),
                           icon: const Icon(Icons.photo_library),
                           label: const Text('Gallery'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
                         ),
                       ],
                     ),
@@ -133,17 +141,36 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
             )
           else ...[
             Container(
-              height: 180,
+              height: 160,
               width: double.infinity,
-              margin: const EdgeInsets.all(16),
+              margin: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
                 image: DecorationImage(image: FileImage(_image!), fit: BoxFit.cover),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: CircleAvatar(
+                      backgroundColor: Colors.black54,
+                      radius: 18,
+                      child: IconButton(
+                        icon: const Icon(Icons.close, size: 18, color: Colors.white),
+                        onPressed: () => setState(() {
+                          _image = null;
+                          _extractedItems = [];
+                        }),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -162,70 +189,148 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
               onPressed: _showCategoryDialog,
               label: const Text('Save Bill'),
               icon: const Icon(Icons.save),
+              backgroundColor: Colors.green.shade700,
             )
           : null,
     );
   }
 
   Widget _buildEditableTable() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 80),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columnSpacing: 24,
-          columns: const [
-            DataColumn(label: Text('Item Name', style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Rate', style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Amount', style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Action', style: TextStyle(fontWeight: FontWeight.bold))),
-          ],
-          rows: List<DataRow>.generate(_extractedItems.length, (index) {
-            return DataRow(cells: [
-              DataCell(
-                SizedBox(
-                  width: 150,
-                  child: TextField(
-                    controller: _nameControllers[index],
-                    decoration: const InputDecoration(isDense: true, border: InputBorder.none),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Summary bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.receipt, color: Colors.green.shade700, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  '${_extractedItems.length} items detected',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: Colors.green.shade800),
+                ),
+                const Spacer(),
+                Text(
+                  'Total: ₹${_calculateTotal().toStringAsFixed(2)}',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade800),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Table header
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+            decoration: BoxDecoration(
+              color: Colors.green.shade100,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(8),
+                topRight: Radius.circular(8),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Expanded(flex: 3, child: Text('Item', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                const Expanded(flex: 1, child: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                const Expanded(flex: 1, child: Text('Rate', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                const Expanded(flex: 1, child: Text('Amount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                const SizedBox(width: 36),
+              ],
+            ),
+          ),
+          // Table rows
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.only(bottom: 80),
+              itemCount: _extractedItems.length,
+              itemBuilder: (context, index) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: index % 2 == 0 ? Colors.white : Colors.grey.shade50,
+                    border: Border(
+                      bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
+                    ),
                   ),
-                ),
-              ),
-              DataCell(
-                SizedBox(
-                  width: 60,
-                  child: TextField(
-                    controller: _qtyControllers[index],
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(isDense: true, border: InputBorder.none),
-                    onChanged: (val) => _updateAmount(index),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    child: Row(
+                      children: [
+                        // Item name
+                        Expanded(
+                          flex: 3,
+                          child: TextField(
+                            controller: _nameControllers[index],
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(vertical: 4),
+                            ),
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                        // Quantity
+                        Expanded(
+                          flex: 1,
+                          child: TextField(
+                            controller: _qtyControllers[index],
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(vertical: 4),
+                            ),
+                            style: const TextStyle(fontSize: 13),
+                            onChanged: (_) => _onFieldChanged(),
+                          ),
+                        ),
+                        // Rate
+                        Expanded(
+                          flex: 1,
+                          child: TextField(
+                            controller: _rateControllers[index],
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(vertical: 4),
+                            ),
+                            style: const TextStyle(fontSize: 13),
+                            onChanged: (_) => _onFieldChanged(),
+                          ),
+                        ),
+                        // Amount (read-only)
+                        Expanded(
+                          flex: 1,
+                          child: Text(
+                            '₹${_calculateItemAmount(index).toStringAsFixed(0)}',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                        ),
+                        // Delete button
+                        SizedBox(
+                          width: 36,
+                          child: IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                            onPressed: () => _removeItem(index),
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
-              DataCell(
-                SizedBox(
-                  width: 80,
-                  child: TextField(
-                    controller: _rateControllers[index],
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(isDense: true, border: InputBorder.none),
-                    onChanged: (val) => _updateAmount(index),
-                  ),
-                ),
-              ),
-              DataCell(
-                Text('₹${_calculateItemAmount(index).toStringAsFixed(2)}'),
-              ),
-              DataCell(
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                  onPressed: () => _removeItem(index),
-                ),
-              ),
-            ]);
-          }),
-        ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -236,9 +341,18 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
     return qty * rate;
   }
 
-  void _updateAmount(int index) {
+  double _calculateTotal() {
+    double total = 0;
+    for (int i = 0; i < _extractedItems.length; i++) {
+      total += _calculateItemAmount(i);
+    }
+    return total;
+  }
+
+  void _onFieldChanged() {
+    // Only rebuild the summary, not the entire table
     setState(() {
-      // Just to trigger UI refresh for the Amount column
+      // Minimal rebuild - just updates the summary bar text
     });
   }
 
@@ -248,6 +362,7 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
       _nameControllers.removeAt(index).dispose();
       _qtyControllers.removeAt(index).dispose();
       _rateControllers.removeAt(index).dispose();
+      _unitControllers.removeAt(index).dispose();
     });
   }
 
@@ -255,29 +370,40 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Select Bill Category'),
-        content: const Text('What is this bill for?'),
+        title: const Text('Bill Category'),
+        content: const Text('Yeh bill kis chiz ke liye hai? / What is this bill for?'),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _handleSave('party');
-            },
-            child: const Text('Officers Party'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _handleSave('deduction');
-            },
-            child: const Text('Daily Deduction'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _handleSave('stock');
-            },
-            child: const Text('Per Month Stock Fill'),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.people, color: Colors.purple),
+                title: const Text('Officers Party'),
+                subtitle: const Text('अफ़सरों की पार्टी के लिए'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _handleSave('party');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.remove_circle, color: Colors.red),
+                title: const Text('Daily Deduction'),
+                subtitle: const Text('रोज़ाना कटौती के लिए'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _handleSave('deduction');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.inventory_2, color: Colors.blue),
+                title: const Text('Per Month Stock Fill'),
+                subtitle: const Text('मासिक स्टॉक भरने के लिए'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _handleSave('stock');
+                },
+              ),
+            ],
           ),
         ],
       ),
@@ -291,12 +417,15 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
       final name = _nameControllers[i].text.trim();
       final qty = double.tryParse(_qtyControllers[i].text) ?? 0;
       final rate = double.tryParse(_rateControllers[i].text) ?? 0;
+      final unit = _unitControllers[i].text.trim().isNotEmpty 
+          ? _unitControllers[i].text.trim() 
+          : 'unit';
       
       if (name.isNotEmpty && qty > 0) {
         finalItems.add(BillItem(
           name: name,
           quantity: qty,
-          unit: "unit",
+          unit: unit,
           rate: rate,
           amount: qty * rate,
         ));
@@ -311,11 +440,11 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
     }
 
     if (category == 'party') {
-      _saveToParty(finalItems);
+      await _saveToParty(finalItems);
     } else if (category == 'deduction') {
-      _saveToDeduction(finalItems);
+      await _saveToDeduction(finalItems);
     } else {
-      _saveToStock(finalItems);
+      await _saveToStock(finalItems);
     }
   }
 
@@ -377,8 +506,13 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
       
       ref.read(inventoryListProvider.notifier).loadItems();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Stock updated successfully')));
-        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Stock updated successfully')),
+        );
+        setState(() {
+          _image = null;
+          _extractedItems = [];
+        });
       }
     }
   }
@@ -429,8 +563,13 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
       
       ref.read(inventoryListProvider.notifier).loadItems();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deduction recorded successfully')));
-        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Deduction recorded successfully')),
+        );
+        setState(() {
+          _image = null;
+          _extractedItems = [];
+        });
       }
     }
   }
@@ -438,23 +577,40 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
   Future<void> _saveToParty(List<BillItem> items) async {
     final officersAsync = ref.read(officerListProvider);
     OfficerEntity? selectedOfficer;
+    final List<OfficerEntity> allOfficers = [];
     
+    officersAsync.when(
+      data: (officers) {
+        allOfficers.clear();
+        allOfficers.addAll(officers);
+      },
+      loading: () {},
+      error: (_, __) {},
+    );
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Select Officer'),
-          content: officersAsync.when(
-            data: (officers) => DropdownButton<OfficerEntity>(
-              isExpanded: true,
-              value: selectedOfficer,
-              hint: const Text('Choose Officer'),
-              items: officers.map((o) => DropdownMenuItem(value: o, child: Text(o.name))).toList(),
-              onChanged: (val) => setDialogState(() => selectedOfficer = val),
-            ),
-            loading: () => const CircularProgressIndicator(),
-            error: (_, __) => const Text('Error loading officers'),
-          ),
+          content: allOfficers.isEmpty
+              ? const Text('No officers registered. Please add officers first.')
+              : SizedBox(
+                  height: 300,
+                  child: ListView.builder(
+                    itemCount: allOfficers.length,
+                    itemBuilder: (context, index) {
+                      final officer = allOfficers[index];
+                      return RadioListTile<OfficerEntity>(
+                        value: officer,
+                        groupValue: selectedOfficer,
+                        title: Text('${officer.rank} ${officer.name}'),
+                        subtitle: Text('PN: ${officer.personalNumber}'),
+                        onChanged: (val) => setDialogState(() => selectedOfficer = val),
+                      );
+                    },
+                  ),
+                ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
             TextButton(
@@ -467,20 +623,68 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
     );
 
     if (confirmed == true && selectedOfficer != null) {
-      final repository = ref.read(officerRepositoryProvider);
+      final partyRepo = ref.read(officerRepositoryProvider);
+      final inventoryRepo = ref.read(inventoryRepositoryProvider);
       double totalAmount = items.fold(0, (sum, item) => sum + item.amount);
+      final partyEntryId = const Uuid().v4();
       
-      await repository.addPartyEntry(PartyEntryEntity(
-        id: const Uuid().v4(),
+      // Create party entry
+      await partyRepo.addPartyEntry(PartyEntryEntity(
+        id: partyEntryId,
         officerId: selectedOfficer!.id,
         date: DateTime.now(),
         amount: totalAmount,
         description: 'Bill Scan: ${items.length} items',
       ));
       
+      // Also save individual party items to the new table
+      final db = (ref.read(databaseHelperProvider));
+      final database = await db.database;
+      
+      for (var item in items) {
+        await database.insert('party_items', {
+          'id': const Uuid().v4(),
+          'partyEntryId': partyEntryId,
+          'itemName': item.name,
+          'quantity': item.quantity,
+          'rate': item.rate,
+          'amount': item.amount,
+          'unit': item.unit,
+        });
+      }
+      
+      // Also create deduction entries for stock management
+      for (var item in items) {
+        final existingItems = await inventoryRepo.getItems();
+        String itemId = '';
+        
+        existingItems.fold((_) => null, (list) {
+          final found = list.where((e) => e.name.toLowerCase() == item.name.toLowerCase());
+          if (found.isNotEmpty) {
+            itemId = found.first.id;
+          }
+        });
+
+        if (itemId.isNotEmpty) {
+          await inventoryRepo.addDeductionEntry(DeductionEntryEntity(
+            id: const Uuid().v4(),
+            itemId: itemId,
+            date: DateTime.now(),
+            quantity: item.quantity,
+            reason: 'Party - ${selectedOfficer.name}',
+          ));
+        }
+      }
+      
+      ref.read(inventoryListProvider.notifier).loadItems();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Party expense recorded successfully')));
-        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Party expense recorded successfully with all items')),
+        );
+        setState(() {
+          _image = null;
+          _extractedItems = [];
+        });
       }
     }
   }

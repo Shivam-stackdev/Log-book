@@ -10,6 +10,7 @@ import 'package:army_mess_inventory/features/inventory/domain/usecases/get_purch
 import 'package:army_mess_inventory/features/inventory/domain/usecases/calculate_cost_per_officer.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/purchase_suggestion_entity.dart';
 import 'package:army_mess_inventory/core/usecases/usecase.dart';
+import 'package:army_mess_inventory/features/ai/data/ai_service.dart';
 
 final databaseHelperProvider = Provider((ref) => DatabaseHelper.instance);
 
@@ -21,6 +22,10 @@ final inventoryRepositoryProvider = Provider<InventoryRepository>((ref) {
 final officerRepositoryProvider = Provider<OfficerRepository>((ref) {
   final dbHelper = ref.watch(databaseHelperProvider);
   return OfficerRepositoryImpl(dbHelper);
+});
+
+final aiServiceProvider = Provider<AIService>((ref) {
+  return AIService();
 });
 
 final inventoryListProvider = StateNotifierProvider<InventoryNotifier, AsyncValue<List<ItemEntity>>>((ref) {
@@ -36,7 +41,6 @@ class InventoryNotifier extends StateNotifier<AsyncValue<List<ItemEntity>>> {
   }
 
   Future<void> loadItems() async {
-    state = const AsyncValue.loading();
     final result = await repository.getItems();
     result.fold(
       (failure) => state = AsyncValue.error(failure, StackTrace.current),
@@ -47,7 +51,7 @@ class InventoryNotifier extends StateNotifier<AsyncValue<List<ItemEntity>>> {
   Future<void> addItem(ItemEntity item) async {
     final result = await repository.addItem(item);
     result.fold(
-      (failure) => null, // Handle error
+      (failure) => null,
       (_) => loadItems(),
     );
   }
@@ -99,7 +103,6 @@ class OfficerNotifier extends StateNotifier<AsyncValue<List<OfficerEntity>>> {
   }
 
   Future<void> loadOfficers() async {
-    state = const AsyncValue.loading();
     final result = await repository.getOfficers();
     result.fold(
       (failure) => state = AsyncValue.error(failure, StackTrace.current),
