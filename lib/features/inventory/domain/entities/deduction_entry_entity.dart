@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:intl/intl.dart';
 
 class DeductionEntryEntity extends Equatable {
   final String id;
@@ -14,6 +15,8 @@ class DeductionEntryEntity extends Equatable {
     required this.quantity,
     required this.reason,
   });
+
+  String get dateFormatted => DateFormat('dd MMM yyyy').format(date);
 
   @override
   List<Object?> get props => [id, itemId, date, quantity, reason];

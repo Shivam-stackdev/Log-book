@@ -10,10 +10,10 @@ class OfficerModel extends OfficerEntity {
 
   factory OfficerModel.fromMap(Map<String, dynamic> map) {
     return OfficerModel(
-      id: map['id'],
-      name: map['name'],
-      rank: map['rank'],
-      personalNumber: map['personalNumber'],
+      id: map['id'] as String,
+      name: map['name'] as String,
+      rank: map['rank'] as String,
+      personalNumber: map['personalNumber'] as String,
     );
   }
 
@@ -24,14 +24,5 @@ class OfficerModel extends OfficerEntity {
       'rank': rank,
       'personalNumber': personalNumber,
     };
-  }
-
-  factory OfficerModel.fromEntity(OfficerEntity entity) {
-    return OfficerModel(
-      id: entity.id,
-      name: entity.name,
-      rank: entity.rank,
-      personalNumber: entity.personalNumber,
-    );
   }
 }

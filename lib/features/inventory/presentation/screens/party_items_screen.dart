@@ -1,33 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:uuid/uuid.dart';
-import 'package:army_mess_inventory/features/inventory/presentation/providers/inventory_providers.dart';
-import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
-import 'package:army_mess_inventory/features/inventory/domain/entities/officer_entity.dart';
-import 'package:army_mess_inventory/features/inventory/domain/entities/party_items_entity.dart';
-import 'package:army_mess_inventory/features/inventory/data/models/party_entry_model.dart';
+import 'package:army_mess_inventory/core/theme/app_theme.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/party_entry_entity.dart';
-import 'package:army_mess_inventory/core/utils/database_helper.dart';
-import 'package:intl/intl.dart';
+// PartyItemEntity is in party_entry_entity.dart
+import 'package:army_mess_inventory/features/inventory/presentation/providers/inventory_providers.dart';
+import 'package:uuid/uuid.dart';
 
 class PartyItemsScreen extends ConsumerStatefulWidget {
   final String officerId;
   final String officerName;
-
-  const PartyItemsScreen({
-    super.key,
-    required this.officerId,
-    required this.officerName,
-  });
-
+  const PartyItemsScreen({super.key, required this.officerId, required this.officerName});
   @override
   ConsumerState<PartyItemsScreen> createState() => _PartyItemsScreenState();
 }
 
 class _PartyItemsScreenState extends ConsumerState<PartyItemsScreen> {
-  List<PartyEntryEntity> _partyEntries = [];
-  List<Map<String, dynamic>> _allPartyData = [];
+  List<Map<String, dynamic>> _partyData = [];
   bool _isLoading = true;
 
   @override
@@ -39,295 +27,123 @@ class _PartyItemsScreenState extends ConsumerState<PartyItemsScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final repository = ref.read(officerRepositoryProvider);
-    final dbHelper = ref.read(databaseHelperProvider);
-    final db = await dbHelper.database;
-
-    // Load party entries for this officer
     final entriesResult = await repository.getPartyEntries(widget.officerId);
     entriesResult.fold(
-      (_) => _partyEntries = [],
-      (entries) => _partyEntries = entries,
+      (error) => setState(() => _isLoading = false),
+      (entries) async {
+        List<Map<String, dynamic>> data = [];
+        for (var entry in entries) {
+          final itemsResult = await repository.getPartyItems(entry.id);
+          itemsResult.fold((_) => null, (items) => data.add({'entry': entry, 'items': items}));
+        }
+        if (mounted) setState(() { _partyData = data; _isLoading = false; });
+      },
     );
-
-    // Load detailed party items for each entry
-    _allPartyData = [];
-    for (var entry in _partyEntries) {
-      final itemResults = await db.query(
-        'party_items',
-        where: 'partyEntryId = ?',
-        whereArgs: [entry.id],
-      );
-      final items = itemResults.map((row) => PartyItemEntity.fromMap(row)).toList();
-      _allPartyData.add({
-        'entry': entry,
-        'items': items,
-      });
-    }
-
-    setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: GlassAppBar(
-        title: '${widget.officerName} - Party',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _showAddPartyItemDialog,
-          ),
-        ],
+      appBar: AppBar(title: Text('Party - ${widget.officerName}')),
+      body: _isLoading ? const Center(child: CircularProgressIndicator()) : _partyData.isEmpty ? _buildEmptyState() : RefreshIndicator(
+        onRefresh: _loadData,
+        child: ListView.builder(padding: const EdgeInsets.all(16), itemCount: _partyData.length, itemBuilder: (context, index) => _buildPartyCard(index)),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _allPartyData.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.no_drinks, size: 60, color: Colors.grey),
-                      const SizedBox(height: 16),
-                      const Text('No party items yet', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                      const SizedBox(height: 20),
-                      ElevatedButton.icon(
-                        onPressed: _showAddPartyItemDialog,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Party Items'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade700,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _allPartyData.length,
-                    itemBuilder: (context, index) {
-                      final data = _allPartyData[index];
-                      final entry = data['entry'] as PartyEntryEntity;
-                      final items = data['items'] as List<PartyItemEntity>;
-                      return _buildPartyCard(entry, items);
-                    },
-                  ),
-                ),
+      floatingActionButton: FloatingActionButton(onPressed: () => _showAddPartyEntryDialog(), child: const Icon(Icons.add)),
     );
   }
 
-  Widget _buildPartyCard(PartyEntryEntity entry, List<PartyItemEntity> items) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ExpansionTile(
-        initiallyExpanded: false,
-        title: Row(
-          children: [
-            const Icon(Icons.local_bar, color: Colors.purple, size: 24),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.description,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    DateFormat('dd MMM yyyy, hh:mm a').format(entry.date),
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              '₹${entry.amount.toStringAsFixed(2)}',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Colors.purple.shade700,
-              ),
-            ),
-          ],
-        ),
-        children: [
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Items:',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                const SizedBox(height: 8),
-                ...items.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.itemName,
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      ),
-                      Text(
-                        '${item.quantity} ${item.unit}',
-                        style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '₹${item.rate.toStringAsFixed(2)}',
-                        style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '₹${item.amount.toStringAsFixed(2)}',
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                )),
-                const Divider(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    const Text('Total: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text(
-                      '₹${entry.amount.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.green.shade700,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  Widget _buildEmptyState() {
+    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Icon(Icons.celebration, size: 64, color: AppColors.textSecondary.withOpacity(0.4)),
+      const SizedBox(height: 16),
+      Text('No party entries yet', style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 8),
+      Text('Add a party entry to start tracking', style: TextStyle(color: AppColors.textSecondary)),
+    ]));
   }
 
-  void _showAddPartyItemDialog() {
-    final nameController = TextEditingController();
-    final quantityController = TextEditingController();
-    final rateController = TextEditingController();
-    final unitController = TextEditingController(text: 'bottle');
+  Widget _buildPartyCard(int index) {
+    final data = _partyData[index];
+    final PartyEntryEntity entry = data['entry'];
+    final List<PartyItemEntity> items = data['items'] ?? [];
+    return Card(margin: const EdgeInsets.only(bottom: 12), child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(entry.description, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+        Text('Rs. ${entry.amount.toStringAsFixed(0)}', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 16)),
+      ]),
+      const SizedBox(height: 4),
+      Text(entry.dateFormatted, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+      if (items.isNotEmpty) ...[const SizedBox(height: 12), const Divider(), const SizedBox(height: 8), ...items.map((item) => Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(children: [
+        Expanded(flex: 3, child: Text(item.itemName)),
+        Expanded(flex: 1, child: Text('${item.quantity} ${item.unit}')),
+        Expanded(flex: 1, child: Text('Rs. ${item.rate}', textAlign: TextAlign.right)),
+        Expanded(flex: 1, child: Text('Rs. ${item.amount}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w500))),
+      ]))],
+    ])));
+  }
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Item to Party'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Item Name (Bar Item)'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: quantityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Quantity'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: unitController,
-              decoration: const InputDecoration(labelText: 'Unit (e.g., bottle, peg, glass)'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: rateController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Rate per unit (₹)'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              final qty = double.tryParse(quantityController.text) ?? 0;
-              final rate = double.tryParse(rateController.text) ?? 0;
-              final unit = unitController.text.trim();
+  void _showAddPartyEntryDialog() {
+    final descCtrl = TextEditingController();
+    final amountCtrl = TextEditingController();
+    List<PartyItemInput> itemInputs = [];
+    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setState) => AlertDialog(
+      title: const Text('Add Party Entry'),
+      content: SizedBox(width: double.maxFinite, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Description'), autofocus: true),
+        const SizedBox(height: 8),
+        TextField(controller: amountCtrl, decoration: const InputDecoration(labelText: 'Total Amount (Rs.)'), keyboardType: TextInputType.number),
+        const SizedBox(height: 12),
+        const Text('Items:', style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        ...itemInputs.asMap().entries.map((e) => _buildItemRow(e.key, e.value, setState)),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(onPressed: () => setState(() => itemInputs.add(PartyItemInput())), icon: const Icon(Icons.add, size: 18), label: const Text('Add Item')),
+      ]))),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        FilledButton(onPressed: () async {
+          Navigator.pop(ctx);
+          await _savePartyEntry(descCtrl.text, double.tryParse(amountCtrl.text) ?? 0, itemInputs);
+        }, child: const Text('Save')),
+      ],
+    )));
+  }
 
-              if (name.isEmpty || qty <= 0 || rate <= 0) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please fill all fields correctly')),
-                );
-                return;
-              }
+  Widget _buildItemRow(int index, PartyItemInput input, StateSetter setState) {
+    return Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(children: [
+      Expanded(flex: 3, child: TextField(controller: input.nameCtrl, decoration: const InputDecoration(labelText: 'Item', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6)))),
+      const SizedBox(width: 4),
+      Expanded(child: TextField(controller: input.qtyCtrl, decoration: const InputDecoration(labelText: 'Qty', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6)), keyboardType: TextInputType.number)),
+      const SizedBox(width: 4),
+      Expanded(child: TextField(controller: input.rateCtrl, decoration: const InputDecoration(labelText: 'Rate', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6)), keyboardType: TextInputType.number)),
+      const SizedBox(width: 4),
+      IconButton(icon: const Icon(Icons.remove_circle, color: AppColors.error, size: 20), onPressed: () => setState(() => itemInputs.removeAt(index))),
+    ]));
+  }
 
-              final db = await ref.read(databaseHelperProvider).database;
-              final amount = qty * rate;
-
-              // Create or get a party entry for today
-              final today = DateTime.now();
-              final todayStr = today.toIso8601String().split('T')[0];
-              
-              // Check if there's already an entry for this officer today
-              var existingEntries = await db.query(
-                'party_entries',
-                where: 'officerId = ? AND date LIKE ?',
-                whereArgs: [widget.officerId, '$todayStr%'],
-              );
-
-              String partyEntryId;
-              if (existingEntries.isNotEmpty) {
-                partyEntryId = existingEntries.first['id'] as String;
-                // Update existing entry amount
-                final currentAmount = existingEntries.first['amount'] as double;
-                await db.update(
-                  'party_entries',
-                  {'amount': currentAmount + amount},
-                  where: 'id = ?',
-                  whereArgs: [partyEntryId],
-                );
-              } else {
-                partyEntryId = const Uuid().v4();
-                await db.insert('party_entries', {
-                  'id': partyEntryId,
-                  'officerId': widget.officerId,
-                  'date': today.toIso8601String(),
-                  'amount': amount,
-                  'description': 'Bar Items - $name',
-                });
-              }
-
-              // Insert party item
-              await db.insert('party_items', {
-                'id': const Uuid().v4(),
-                'partyEntryId': partyEntryId,
-                'itemName': name,
-                'quantity': qty,
-                'rate': rate,
-                'amount': amount,
-                'unit': unit,
-              });
-
-              Navigator.pop(context);
-              await _loadData();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Item added to party')),
-                );
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
+  Future<void> _savePartyEntry(String description, double totalAmount, List<PartyItemInput> itemInputs) async {
+    if (description.isEmpty) return;
+    final repository = ref.read(officerRepositoryProvider);
+    final entry = PartyEntryEntity(id: const Uuid().v4(), officerId: widget.officerId, date: DateTime.now(), amount: totalAmount, description: description);
+    final result = await repository.addPartyEntry(entry);
+    result.fold(
+      (error) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message))),
+      (_) async {
+        for (var input in itemInputs) {
+          if (input.nameCtrl.text.isEmpty) continue;
+          final partyItem = PartyItemEntity(id: const Uuid().v4(), partyEntryId: entry.id, itemName: input.nameCtrl.text, quantity: double.tryParse(input.qtyCtrl.text) ?? 0, rate: double.tryParse(input.rateCtrl.text) ?? 0, amount: (double.tryParse(input.qtyCtrl.text) ?? 0) * (double.tryParse(input.rateCtrl.text) ?? 0), unit: 'pcs');
+          await repository.addPartyItem(partyItem);
+        }
+        _loadData();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Party entry saved')));
+      },
     );
   }
+}
+
+class PartyItemInput {
+  final TextEditingController nameCtrl = TextEditingController();
+  final TextEditingController qtyCtrl = TextEditingController();
+  final TextEditingController rateCtrl = TextEditingController();
 }

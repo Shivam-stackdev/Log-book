@@ -7,6 +7,7 @@ class ItemEntity extends Equatable {
   final double currentStock;
   final double reorderLevel;
   final String category;
+  final double rate;
 
   const ItemEntity({
     required this.id,
@@ -15,8 +16,12 @@ class ItemEntity extends Equatable {
     required this.currentStock,
     required this.reorderLevel,
     required this.category,
+    this.rate = 0,
   });
 
+  bool get isLowStock => currentStock <= reorderLevel;
+  bool get isOutOfStock => currentStock == 0;
+
   @override
-  List<Object?> get props => [id, name, unit, currentStock, reorderLevel, category];
+  List<Object?> get props => [id, name, unit, currentStock, reorderLevel, category, rate];
 }

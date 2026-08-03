@@ -17,6 +17,8 @@ class StockEntryEntity extends Equatable {
     required this.supplier,
   });
 
+  double get totalAmount => quantity * unitPrice;
+
   @override
   List<Object?> get props => [id, itemId, date, quantity, unitPrice, supplier];
 }

@@ -11,11 +11,11 @@ class PartyEntryModel extends PartyEntryEntity {
 
   factory PartyEntryModel.fromMap(Map<String, dynamic> map) {
     return PartyEntryModel(
-      id: map['id'],
-      officerId: map['officerId'],
-      date: DateTime.parse(map['date']),
-      amount: map['amount'].toDouble(),
-      description: map['description'],
+      id: map['id'] as String,
+      officerId: map['officerId'] as String,
+      date: DateTime.parse(map['date'] as String),
+      amount: (map['amount'] as num).toDouble(),
+      description: map['description'] as String,
     );
   }
 
@@ -27,15 +27,5 @@ class PartyEntryModel extends PartyEntryEntity {
       'amount': amount,
       'description': description,
     };
-  }
-
-  factory PartyEntryModel.fromEntity(PartyEntryEntity entity) {
-    return PartyEntryModel(
-      id: entity.id,
-      officerId: entity.officerId,
-      date: entity.date,
-      amount: entity.amount,
-      description: entity.description,
-    );
   }
 }

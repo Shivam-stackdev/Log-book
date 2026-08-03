@@ -1,218 +1,102 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
+import 'package:intl/intl.dart';
+import 'package:army_mess_inventory/core/theme/app_theme.dart';
+import 'package:army_mess_inventory/core/utils/app_localizations.dart';
+import 'package:army_mess_inventory/features/inventory/presentation/providers/inventory_providers.dart';
+import 'package:army_mess_inventory/features/inventory/presentation/widgets/ui_widgets.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final inventoryAsync = ref.watch(inventoryListProvider);
+
     return Scaffold(
-      appBar: const GlassAppBar(title: 'Army Mess Inventory'),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.green.shade50,
-              Colors.white,
-              Colors.blue.shade50,
-            ],
-          ),
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 24),
-              _buildStatsGrid(),
-              const SizedBox(height: 24),
-              const Text(
-                'Quick Actions',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () async => ref.read(inventoryListProvider.notifier).refresh(),
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(child: _buildHeader(context, l10n)),
+              SliverToBoxAdapter(child: _buildStatsSection(inventoryAsync, l10n)),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                  child: Text(l10n.translate('quick_actions'), style: Theme.of(context).textTheme.titleLarge),
                 ),
               ),
-              const SizedBox(height: 15),
-              _buildActionGrid(context),
-            ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: _buildBottomNav(context),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Welcome, Quartermaster',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Colors.green.shade900,
-          ),
-        ),
-        const Text(
-          'Mess Inventory Status: Operational',
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.black54,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatsGrid() {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.5,
-      children: [
-        _buildStatCard('Total Items', '124', Icons.inventory, Colors.blue),
-        _buildStatCard('Low Stock', '12', Icons.warning_amber, Colors.orange),
-        _buildStatCard('Daily Deduction', '₹ 4,500', Icons.trending_down, Colors.red),
-        _buildStatCard('Monthly Cost', '₹ 1.2L', Icons.account_balance_wallet, Colors.green),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
-    return GlassContainer(
-      padding: const EdgeInsets.all(15),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Icon(icon, color: color, size: 28),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+              SliverPadding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2, childAspectRatio: 1.2,
+                    mainAxisSpacing: AppSpacing.md, crossAxisSpacing: AppSpacing.md,
+                  ),
+                  delegate: SliverChildListDelegate([
+                    ActionButton(title: l10n.translate('stock_management'), subtitle: l10n.translate('record_daily_usage'), icon: Icons.inventory_2, onTap: () => context.go('/stock')),
+                    ActionButton(title: l10n.translate('daily_deduction'), subtitle: l10n.translate('record_daily_usage'), icon: Icons.remove_circle_outline, color: AppColors.error, onTap: () => context.go('/deduction')),
+                    ActionButton(title: l10n.translate('officer_party'), subtitle: l10n.translate('officer_party'), icon: Icons.groups, color: AppColors.secondary, onTap: () => context.go('/officers')),
+                    ActionButton(title: l10n.translate('ocr_bill_scan'), subtitle: l10n.translate('import_bills'), icon: Icons.document_scanner, color: AppColors.accent, onTap: () => context.go('/ocr')),
+                  ]),
                 ),
               ),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.black54,
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                  child: Text(l10n.translate('reports'), style: Theme.of(context).textTheme.titleLarge),
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionGrid(BuildContext context) {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      children: [
-        _buildActionCard(
-          context,
-          'Stock Management',
-          'Manage inventory items',
-          Icons.list_alt,
-          '/stock',
-        ),
-        _buildActionCard(
-          context,
-          'Daily Deduction',
-          'Record daily usage',
-          Icons.remove_circle_outline,
-          '/deduction',
-        ),
-        _buildActionCard(
-          context,
-          'Officer Party',
-          'Manage officer bills',
-          Icons.people_outline,
-          '/officers',
-        ),
-        _buildActionCard(
-          context,
-          'OCR Bill Scan',
-          'Import bills automatically',
-          Icons.document_scanner,
-          '/ocr',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionCard(
-      BuildContext context, String title, String subtitle, IconData icon, String route) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => context.push(route),
-        child: GlassContainer(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 40, color: Colors.green.shade700),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: Colors.black54,
+              SliverPadding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2, childAspectRatio: 1.2,
+                    mainAxisSpacing: AppSpacing.md, crossAxisSpacing: AppSpacing.md,
+                  ),
+                  delegate: SliverChildListDelegate([
+                    ActionButton(title: l10n.translate('reports'), subtitle: 'Generate PDF reports', icon: Icons.picture_as_pdf, color: AppColors.accent, onTap: () => context.go('/reports')),
+                    ActionButton(title: l10n.translate('history'), subtitle: 'View past transactions', icon: Icons.history, color: AppColors.secondary, onTap: () => context.go('/history')),
+                  ]),
                 ),
               ),
             ],
           ),
         ),
       ),
+      floatingActionButton: FloatingActionButton(onPressed: () => context.go('/settings'), child: const Icon(Icons.settings)),
     );
   }
 
-  Widget _buildBottomNav(BuildContext context) {
-    return NavigationBar(
-      backgroundColor: Colors.white.withOpacity(0.9),
-      destinations: const [
-        NavigationDestination(icon: Icon(Icons.dashboard), label: 'Home'),
-        NavigationDestination(icon: Icon(Icons.analytics), label: 'Reports'),
-        NavigationDestination(icon: Icon(Icons.history), label: 'History'),
-        NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
-      ],
-      onDestinationSelected: (index) {
-        if (index == 1) context.push('/reports');
-        if (index == 2) context.push('/history');
-        if (index == 3) context.push('/settings');
-      },
+  Widget _buildHeader(BuildContext context, AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.sm),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(l10n.translate('welcome'), style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 4),
+        Text(DateFormat('EEEE, dd MMMM yyyy').format(DateTime.now()), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)),
+      ]),
+    );
+  }
+
+  Widget _buildStatsSection(AsyncValue inventoryAsync, AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: inventoryAsync.when(
+        data: (items) {
+          final lowStockCount = items.where((dynamic i) => i.isLowStock).length;
+          return Row(children: [
+            Expanded(child: StatCard(title: l10n.translate('total_items'), value: '${items.length}', icon: Icons.inventory_2)),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: StatCard(title: l10n.translate('low_stock'), value: '$lowStockCount', icon: Icons.warning, color: lowStockCount > 0 ? AppColors.warning : AppColors.success)),
+          ]);
+        },
+        loading: () => const LinearProgressIndicator(),
+        error: (_, __) => const SizedBox.shrink(),
+      ),
     );
   }
 }
