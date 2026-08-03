@@ -6,6 +6,7 @@ on:
       - fix/gradle-plugin-versions
       - main
       - master
+      - manus-dev
   pull_request:
     branches:
       - main
