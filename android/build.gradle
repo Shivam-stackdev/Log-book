@@ -13,9 +13,16 @@ subprojects {
 subprojects {
     project.evaluationDependsOn(':app')
 }
-subprojects {
-    project.plugins.withType(com.android.build.gradle.LibraryPlugin) {
-        project.android.compileSdk = 36
+// Force all plugin library modules (e.g. `printing`, which hardcodes
+// compileSdkVersion 30) to compile against a modern SDK. This must run in
+// `afterEvaluate` so it executes AFTER each plugin's own build.gradle sets
+// its (older) compileSdkVersion — otherwise the plugin's value wins and
+// AAPT fails with "resource android:attr/lStar not found".
+subprojects { subproject ->
+    subproject.afterEvaluate {
+        if (subproject.plugins.hasPlugin("com.android.library")) {
+            subproject.android.compileSdk = 36
+        }
     }
 }
 
