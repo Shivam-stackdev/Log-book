@@ -14,41 +14,41 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   # State Management
-  flutter_riverpod: ^2.5.1
+  flutter_riverpod: any
 
   # Navigation
-  go_router: ^14.0.0
+  go_router: any
 
   # Local Database
-  sqflite: ^2.3.3+1
-  path_provider: ^2.1.4
-  path: ^1.9.0
+  sqflite: any
+  path_provider: any
+  path: any
 
   # Utilities
-  intl: ^0.19.0
-  dartz: ^0.10.1
-  equatable: ^2.0.5
-  uuid: ^4.4.0
-  collection: ^1.18.0
+  intl: any
+  dartz: any
+  equatable: any
+  uuid: any
+  collection: any
 
   # PDF Generation & Printing
-  pdf: ^3.11.0
-  printing: ^5.12.0
+  pdf: any
+  printing: any
 
   # File Sharing
-  share_plus: ^9.0.0
-  cross_file: ^0.3.4+2
+  share_plus: any
+  cross_file: any
 
   # OCR & Media
-  image_picker: ^1.1.2
-  google_mlkit_text_recognition: ^0.14.0
-  camera: ^0.11.0+1
+  image_picker: any
+  google_mlkit_text_recognition: any
+  camera: any
 
   # Persistence
-  shared_preferences: ^2.3.0
+  shared_preferences: any
 
   # HTTP
-  http: ^1.2.1
+  http: any
 
 dev_dependencies:
   flutter_test:

@@ -23,7 +23,7 @@ if (flutterVersionName == null) {
 }
 
 android {
-    namespace "com.mesh.management"
+    namespace "com.example.army_mess_inventory"
     compileSdk 34
     ndkVersion flutter.ndkVersion
 
