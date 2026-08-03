@@ -96,7 +96,7 @@ class _PartyItemsScreenState extends ConsumerState<PartyItemsScreen> {
         const SizedBox(height: 12),
         const Text('Items:', style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
-        ...itemInputs.asMap().entries.map((e) => _buildItemRow(e.key, e.value, setState)),
+        ...itemInputs.asMap().entries.map((e) => _buildItemRow(e.key, e.value, itemInputs, setState)),
         const SizedBox(height: 8),
         OutlinedButton.icon(onPressed: () => setState(() => itemInputs.add(PartyItemInput())), icon: const Icon(Icons.add, size: 18), label: const Text('Add Item')),
       ]))),
@@ -110,7 +110,7 @@ class _PartyItemsScreenState extends ConsumerState<PartyItemsScreen> {
     )));
   }
 
-  Widget _buildItemRow(int index, PartyItemInput input, StateSetter setState) {
+  Widget _buildItemRow(int index, PartyItemInput input, List<PartyItemInput> itemInputs, StateSetter setState) {
     return Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(children: [
       Expanded(flex: 3, child: TextField(controller: input.nameCtrl, decoration: const InputDecoration(labelText: 'Item', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6)))),
       const SizedBox(width: 4),

@@ -26,7 +26,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
       setState(() => _isGenerating = false);
 
-      await SharePlus.instance.share(xFile: XFile(filePath));
+      await Share.shareXFiles([XFile(filePath)]);
       if (mounted) {
         final fileName = filePath.split('/').last;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Report saved and shared: $fileName')));

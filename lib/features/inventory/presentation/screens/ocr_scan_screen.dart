@@ -100,7 +100,7 @@ class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
     if (_imageFile == null) return;
     setState(() => _isProcessing = true);
     try {
-      final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      final recognizer = TextRecognizer(options: TextRecognizerOptions(script: TextRecognitionScript.latin));
       final inputImage = InputImage.fromFile(_imageFile!);
       final recognizedText = await recognizer.processImage(inputImage);
       _extractedText = recognizedText.text;
