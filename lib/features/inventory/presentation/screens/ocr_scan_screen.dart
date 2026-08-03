@@ -1,18 +1,22 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:army_mess_inventory/main.dart';
 import 'package:army_mess_inventory/features/ocr/data/ocr_service.dart';
 import 'package:army_mess_inventory/features/ocr/domain/bill_item.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
+import 'package:army_mess_inventory/features/inventory/domain/entities/transaction_entity.dart';
+import 'package:uuid/uuid.dart';
 
-class OcrScanScreen extends StatefulWidget {
+class OcrScanScreen extends ConsumerStatefulWidget {
   const OcrScanScreen({super.key});
 
   @override
-  State<OcrScanScreen> createState() => _OcrScanScreenState();
+  ConsumerState<OcrScanScreen> createState() => _OcrScanScreenState();
 }
 
-class _OcrScanScreenState extends State<OcrScanScreen> {
+class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
   File? _image;
   bool _isProcessing = false;
   List<BillItem> _extractedItems = [];
@@ -47,6 +51,8 @@ class _OcrScanScreenState extends State<OcrScanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: const GlassAppBar(title: 'Bill Scanner'),
       body: Column(
@@ -57,9 +63,12 @@ class _OcrScanScreenState extends State<OcrScanScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.receipt_long, size: 80, color: Colors.grey),
+                    Icon(Icons.receipt_long, size: 80, color: isDark ? Colors.white38 : Colors.grey),
                     const SizedBox(height: 20),
-                    const Text('No bill selected', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                    Text(
+                      'No bill selected',
+                      style: TextStyle(fontSize: 18, color: isDark ? Colors.white54 : Colors.grey),
+                    ),
                     const SizedBox(height: 30),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -70,7 +79,7 @@ class _OcrScanScreenState extends State<OcrScanScreen> {
                           label: const Text('Camera'),
                         ),
                         const SizedBox(width: 20),
-                        ElevatedButton.icon(
+                        OutlinedButton.icon(
                           onPressed: () => _pickImage(ImageSource.gallery),
                           icon: const Icon(Icons.photo_library),
                           label: const Text('Gallery'),
@@ -94,9 +103,7 @@ class _OcrScanScreenState extends State<OcrScanScreen> {
             if (_isProcessing)
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else
-              Expanded(
-                child: _buildEditableTable(),
-              ),
+              Expanded(child: _buildEditableTable()),
           ],
         ],
       ),
@@ -138,7 +145,7 @@ class _OcrScanScreenState extends State<OcrScanScreen> {
               keyboardType: TextInputType.number,
               onChanged: (val) => _updateItem(index, rate: double.tryParse(val) ?? 0),
             )),
-            DataCell(Text(item.amount.toString())),
+            DataCell(Text(item.amount.toStringAsFixed(2))),
           ]);
         }).toList(),
       ),
@@ -159,8 +166,40 @@ class _OcrScanScreenState extends State<OcrScanScreen> {
     });
   }
 
-  void _saveBill() {
-    // Implement mapping and saving logic
-    Navigator.pop(context);
+  void _saveBill() async {
+    // Add each extracted item as a stock addition
+    final txProvider = ref.read(transactionChangeProvider);
+    final inventoryProvider = ref.read(inventoryChangeProvider);
+
+    for (final billItem in _extractedItems) {
+      // Try to match to existing inventory item
+      final matchedItem = inventoryProvider.items.firstWhere(
+        (i) => i.name.toLowerCase() == billItem.name.toLowerCase(),
+        orElse: () => inventoryProvider.items.first, // fallback
+      );
+
+      final txn = TransactionEntity(
+        id: const Uuid().v4(),
+        itemId: matchedItem.id,
+        itemName: billItem.name,
+        quantity: billItem.quantity,
+        type: 'addition',
+        reason: 'OCR Bill Import',
+        date: DateTime.now(),
+        cost: billItem.amount,
+        unitPrice: billItem.rate,
+      );
+      await txProvider.addTransaction(txn);
+    }
+
+    await inventoryProvider.loadItems();
+    await ref.read(dashboardChangeProvider).refresh();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bill items added to inventory!')),
+      );
+      Navigator.pop(context);
+    }
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:army_mess_inventory/features/inventory/presentation/providers/inventory_providers.dart';
+import 'package:army_mess_inventory/main.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
 
 class PurchaseSuggestionsScreen extends ConsumerWidget {
@@ -8,70 +8,88 @@ class PurchaseSuggestionsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final suggestionsAsync = ref.watch(purchaseSuggestionsProvider);
+    final inventoryProvider = ref.watch(inventoryChangeProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final lowStockItems = inventoryProvider.items
+        .where((item) => item.currentStock <= item.reorderLevel)
+        .toList();
+
+    // Sort: highest priority (zero stock) first
+    lowStockItems.sort((a, b) {
+      if (a.currentStock == 0 && b.currentStock > 0) return -1;
+      if (b.currentStock == 0 && a.currentStock > 0) return 1;
+      return (a.currentStock / (a.reorderLevel == 0 ? 1 : a.reorderLevel))
+          .compareTo(b.currentStock / (b.reorderLevel == 0 ? 1 : b.reorderLevel));
+    });
 
     return Scaffold(
       appBar: const GlassAppBar(title: 'Purchase Suggestions'),
-      body: suggestionsAsync.when(
-        data: (suggestions) {
-          if (suggestions.isEmpty) {
-            return const Center(
+      body: lowStockItems.isEmpty
+          ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.check_circle_outline, size: 80, color: Colors.green),
-                  SizedBox(height: 20),
-                  Text('All items are well stocked!', style: TextStyle(fontSize: 18)),
+                  Icon(Icons.check_circle_outline, size: 80, color: Colors.green.shade400),
+                  const SizedBox(height: 20),
+                  Text(
+                    'All items are well stocked!',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
                 ],
               ),
-            );
-          }
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: lowStockItems.length,
+              itemBuilder: (context, index) {
+                final item = lowStockItems[index];
+                final deficit = item.reorderLevel - item.currentStock;
+                final suggestedQty = deficit + (item.reorderLevel * 0.5);
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: suggestions.length,
-            itemBuilder: (context, index) {
-              final suggestion = suggestions[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: _getPriorityColor(suggestion.priority).withOpacity(0.1),
-                    child: Icon(Icons.shopping_cart, color: _getPriorityColor(suggestion.priority)),
-                  ),
-                  title: Text(suggestion.item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('Current: ${suggestion.item.currentStock} | Suggest: +${suggestion.suggestedQuantity.toStringAsFixed(1)} ${suggestion.item.unit}'),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _getPriorityColor(suggestion.priority).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
+                String priority = 'Low';
+                Color priorityColor = Colors.blue;
+                if (item.currentStock == 0) {
+                  priority = 'Critical';
+                  priorityColor = Colors.red;
+                } else if (item.currentStock <= item.reorderLevel * 0.5) {
+                  priority = 'High';
+                  priorityColor = Colors.orange;
+                }
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: priorityColor.withValues(alpha: 0.15),
+                      child: Icon(Icons.shopping_cart, color: priorityColor),
                     ),
-                    child: Text(
-                      suggestion.priority,
-                      style: TextStyle(
-                        color: _getPriorityColor(suggestion.priority),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                    title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(
+                      'Stock: ${item.currentStock.toStringAsFixed(1)} ${item.unit} | Suggest: +${suggestedQty.toStringAsFixed(1)} ${item.unit}',
+                    ),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: priorityColor.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        priority,
+                        style: TextStyle(
+                          color: priorityColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) => Center(child: Text('Error: $e')),
-      ),
+                );
+              },
+            ),
     );
-  }
-
-  Color _getPriorityColor(String priority) {
-    switch (priority) {
-      case 'High': return Colors.red;
-      case 'Medium': return Colors.orange;
-      default: return Colors.blue;
-    }
   }
 }
