@@ -11,7 +11,7 @@ class GlassContainer extends StatelessWidget {
   const GlassContainer({
     super.key,
     required this.child,
-    this.blur = 10.0,
+    this.blur = 5.0, // Reduced default blur for better performance
     this.opacity = 0.1,
     this.borderRadius = 16.0,
     this.padding,
@@ -19,6 +19,21 @@ class GlassContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Optimization: Don't use BackdropFilter if blur is 0
+    if (blur == 0) {
+      return Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(opacity),
+          borderRadius: BorderRadius.circular(borderRadius),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.2),
+          ),
+        ),
+        child: child,
+      );
+    }
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
