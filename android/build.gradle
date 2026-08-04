@@ -14,8 +14,9 @@ subprojects {
 }
 
 subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty('android')) {
+    project.plugins.configureEach {
+        if (it.class.name.contains('com.android.build.gradle.LibraryPlugin') || 
+            it.class.name.contains('com.android.build.gradle.AppPlugin')) {
             project.android {
                 compileSdk 36
                 defaultConfig {
