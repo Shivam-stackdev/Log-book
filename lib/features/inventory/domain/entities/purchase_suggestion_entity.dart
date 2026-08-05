@@ -4,7 +4,7 @@ import 'package:army_mess_inventory/features/inventory/domain/entities/item_enti
 class PurchaseSuggestionEntity extends Equatable {
   final ItemEntity item;
   final double suggestedQuantity;
-  final String priority; // Low, Medium, High
+  final String priority;
 
   const PurchaseSuggestionEntity({
     required this.item,
@@ -13,5 +13,5 @@ class PurchaseSuggestionEntity extends Equatable {
   });
 
   @override
-  List<Object?> get props => [item, suggestedQuantity, priority];
+  List<Object?> get props => [item.id, suggestedQuantity, priority];
 }

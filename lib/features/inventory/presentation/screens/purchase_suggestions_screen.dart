@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:army_mess_inventory/core/theme/app_theme.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/providers/inventory_providers.dart';
-import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
+import 'package:army_mess_inventory/features/inventory/domain/entities/purchase_suggestion_entity.dart';
+import 'package:army_mess_inventory/features/inventory/presentation/widgets/ui_widgets.dart';
 
 class PurchaseSuggestionsScreen extends ConsumerWidget {
   const PurchaseSuggestionsScreen({super.key});
@@ -11,67 +13,43 @@ class PurchaseSuggestionsScreen extends ConsumerWidget {
     final suggestionsAsync = ref.watch(purchaseSuggestionsProvider);
 
     return Scaffold(
-      appBar: const GlassAppBar(title: 'Purchase Suggestions'),
+      appBar: AppBar(title: const Text('Purchase Suggestions')),
       body: suggestionsAsync.when(
         data: (suggestions) {
           if (suggestions.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.check_circle_outline, size: 80, color: Colors.green),
-                  SizedBox(height: 20),
-                  Text('All items are well stocked!', style: TextStyle(fontSize: 18)),
-                ],
-              ),
-            );
+            return const EmptyState(icon: Icons.check_circle, title: 'All items are well stocked', subtitle: 'No purchase needed at this time');
           }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: suggestions.length,
-            itemBuilder: (context, index) {
-              final suggestion = suggestions[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: _getPriorityColor(suggestion.priority).withOpacity(0.1),
-                    child: Icon(Icons.shopping_cart, color: _getPriorityColor(suggestion.priority)),
-                  ),
-                  title: Text(suggestion.item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('Current: ${suggestion.item.currentStock} | Suggest: +${suggestion.suggestedQuantity.toStringAsFixed(1)} ${suggestion.item.unit}'),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _getPriorityColor(suggestion.priority).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      suggestion.priority,
-                      style: TextStyle(
-                        color: _getPriorityColor(suggestion.priority),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-              );
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(purchaseSuggestionsProvider);
             },
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: suggestions.length,
+              itemBuilder: (context, index) => _buildSuggestionCard(suggestions[index]),
+            ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) => Center(child: Text('Error: $e')),
+        error: (e, _) => Center(child: Text('Error: $e')),
       ),
     );
   }
 
-  Color _getPriorityColor(String priority) {
-    switch (priority) {
-      case 'High': return Colors.red;
-      case 'Medium': return Colors.orange;
-      default: return Colors.blue;
-    }
+  Widget _buildSuggestionCard(PurchaseSuggestionEntity suggestion) {
+    final priorityColor = switch (suggestion.priority) {
+      'High' => AppColors.error,
+      'Medium' => AppColors.warning,
+      _ => AppColors.primary,
+    };
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(backgroundColor: priorityColor.withOpacity(0.1), child: Icon(Icons.shopping_cart, color: priorityColor)),
+        title: Text(suggestion.item.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text('Current: ${suggestion.item.currentStock} ${suggestion.item.unit} | Suggested: ${suggestion.suggestedQuantity.toStringAsFixed(1)} ${suggestion.item.unit}'),
+        trailing: Chip(label: Text(suggestion.priority, style: TextStyle(color: priorityColor, fontSize: 12, fontWeight: FontWeight.bold))),
+      ),
+    );
   }
 }

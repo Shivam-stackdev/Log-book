@@ -13,6 +13,8 @@ class OfficerEntity extends Equatable {
     required this.personalNumber,
   });
 
+  String get displayName => '$rank $name';
+
   @override
   List<Object?> get props => [id, name, rank, personalNumber];
 }

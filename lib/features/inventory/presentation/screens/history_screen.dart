@@ -1,69 +1,87 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:army_mess_inventory/features/inventory/presentation/providers/inventory_providers.dart';
-import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
-import 'package:army_mess_inventory/features/inventory/domain/entities/stock_entry_entity.dart';
 import 'package:intl/intl.dart';
+import 'package:army_mess_inventory/core/theme/app_theme.dart';
+import 'package:army_mess_inventory/core/utils/database_helper.dart';
+import 'package:army_mess_inventory/core/logging/logger.dart';
 
-class HistoryScreen extends ConsumerWidget {
+class HistoryScreen extends ConsumerStatefulWidget {
   const HistoryScreen({super.key});
+  @override
+  ConsumerState<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends ConsumerState<HistoryScreen> {
+  List<Map<String, dynamic>> _history = [];
+  bool _isLoading = true;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final inventoryAsync = ref.watch(inventoryListProvider);
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
 
+  Future<void> _loadHistory() async {
+    setState(() => _isLoading = true);
+    try {
+      final dbHelper = DatabaseHelper.instance;
+      final db = await dbHelper.database;
+      final stockEntries = await db.query('stock_entries', orderBy: 'date DESC', limit: 200);
+      final deductionEntries = await db.query('deduction_entries', orderBy: 'date DESC', limit: 200);
+
+      final items = await db.query('items');
+      final itemMap = {for (var i in items) i['id'] as String: i};
+
+      List<Map<String, dynamic>> history = [];
+      for (var entry in stockEntries) {
+        final item = itemMap[entry['itemId']];
+        history.add({'type': 'stock', 'date': entry['date'], 'itemName': item?['name'] ?? 'Unknown', 'quantity': entry['quantity'], 'rate': entry['unitPrice'], 'supplier': entry['supplier'], 'id': entry['id']});
+      }
+      for (var entry in deductionEntries) {
+        final item = itemMap[entry['itemId']];
+        history.add({'type': 'deduction', 'date': entry['date'], 'itemName': item?['name'] ?? 'Unknown', 'quantity': entry['quantity'], 'reason': entry['reason'], 'id': entry['id']});
+      }
+      history.sort((a, b) => (b['date'] as String).compareTo(a['date'] as String));
+
+      if (mounted) setState(() { _history = history; _isLoading = false; });
+    } catch (e) {
+      AppLogger.e('HistoryScreen', 'Failed to load history', e);
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const GlassAppBar(title: 'Inventory History'),
-      body: inventoryAsync.when(
-        data: (items) {
-          if (items.isEmpty) return const Center(child: Text('No items in inventory'));
-          
-          return ListView.builder(
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return ExpansionTile(
-                leading: const Icon(Icons.history),
-                title: Text(item.name),
-                subtitle: Text('Current Stock: ${item.currentStock} ${item.unit}'),
-                children: [
-                  ref.watch(itemHistoryProvider(item.id)).when(
-                    data: (history) {
-                      if (history.isEmpty) return const Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: Text('No history for this item'),
-                      );
-                      
-                      return ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: history.length,
-                        itemBuilder: (context, hIndex) {
-                          final entry = history[hIndex];
-                          final bool isStock = entry is StockEntryEntity;
-                          
-                          return ListTile(
-                            leading: Icon(
-                              isStock ? Icons.add_circle_outline : Icons.remove_circle_outline,
-                              color: isStock ? Colors.green : Colors.red,
-                            ),
-                            title: Text(isStock ? 'Added: ${entry.quantity} ${item.unit}' : 'Deducted: ${entry.quantity} ${item.unit}'),
-                            subtitle: Text(DateFormat('dd MMM yyyy, hh:mm a').format(entry.date)),
-                            trailing: Text(isStock ? 'From: ${entry.supplier}' : 'Reason: ${entry.reason}', style: const TextStyle(fontSize: 12)),
-                          );
-                        },
-                      );
-                    },
-                    loading: () => const LinearProgressIndicator(),
-                    error: (e, s) => Text('Error: $e'),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) => Center(child: Text('Error: $e')),
+      appBar: AppBar(title: const Text('History')),
+      body: _isLoading ? const Center(child: CircularProgressIndicator()) : _history.isEmpty
+          ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.history, size: 64, color: AppColors.textSecondary.withOpacity(0.4)), const SizedBox(height: 16), Text('No history yet', style: Theme.of(context).textTheme.titleLarge)]))
+          : RefreshIndicator(
+              onRefresh: _loadHistory,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _history.length,
+                itemBuilder: (context, index) => _buildHistoryItem(_history[index]),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildHistoryItem(Map<String, dynamic> entry) {
+    final isStock = entry['type'] == 'stock';
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: isStock ? AppColors.success.withOpacity(0.1) : AppColors.error.withOpacity(0.1),
+          child: Icon(isStock ? Icons.add : Icons.remove, color: isStock ? AppColors.success : AppColors.error, size: 18),
+        ),
+        title: Text(entry['itemName'] as String, style: const TextStyle(fontWeight: FontWeight.w500)),
+        subtitle: Text('${entry['reason'] ?? entry['supplier'] ?? ''} • ${DateFormat('dd MMM yyyy').format(DateTime.parse(entry['date'] as String))}'),
+        trailing: Text(
+          '${isStock ? "+" : "-"}${entry['quantity']} ${isStock ? "Rs. ${entry['rate']}" : ""}',
+          style: TextStyle(color: isStock ? AppColors.success : AppColors.error, fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }

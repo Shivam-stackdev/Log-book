@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:army_mess_inventory/core/theme/app_theme.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/providers/inventory_providers.dart';
-import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
+import 'package:army_mess_inventory/features/inventory/presentation/widgets/ui_widgets.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/officer_entity.dart';
 import 'package:uuid/uuid.dart';
 
 class OfficerListScreen extends ConsumerStatefulWidget {
   const OfficerListScreen({super.key});
-
   @override
   ConsumerState<OfficerListScreen> createState() => _OfficerListScreenState();
 }
@@ -19,124 +19,70 @@ class _OfficerListScreenState extends ConsumerState<OfficerListScreen> {
     final officersAsync = ref.watch(officerListProvider);
 
     return Scaffold(
-      appBar: GlassAppBar(
-        title: 'Officers Messing',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_add),
-            onPressed: () => _showAddOfficerDialog(context),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Officer Party')),
       body: officersAsync.when(
         data: (officers) {
           if (officers.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.people_outline, size: 60, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  const Text('No officers registered', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                  const SizedBox(height: 20),
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddOfficerDialog(context),
-                    icon: const Icon(Icons.person_add),
-                    label: const Text('Add Officer'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade700,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ],
-              ),
+            return EmptyState(
+              icon: Icons.groups, title: 'No officers added',
+              subtitle: 'Add officers to track their party expenses',
+              actionButton: FilledButton.icon(onPressed: () => _showAddOfficerDialog(), icon: const Icon(Icons.add), label: const Text('Add Officer')),
             );
           }
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: officers.length,
-            itemBuilder: (context, index) {
-              final officer = officers[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                elevation: 2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.purple.shade100,
-                    child: Icon(Icons.person, color: Colors.purple.shade700),
-                  ),
-                  title: Text(
-                    '${officer.rank} ${officer.name}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text('PN: ${officer.personalNumber}'),
-                  trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-                  onTap: () {
-                    context.push(
-                      '/party-items',
-                      extra: {
-                        'officerId': officer.id,
-                        'officerName': '${officer.rank} ${officer.name}',
-                      },
-                    );
-                  },
-                ),
-              );
-            },
+          return RefreshIndicator(
+            onRefresh: () async => ref.read(officerListProvider.notifier).refresh(),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              itemCount: officers.length,
+              itemBuilder: (context, index) => _buildOfficerCard(officers[index]),
+            ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+        error: (e, _) => Center(child: Text('Error: $e')),
+      ),
+      floatingActionButton: FloatingActionButton(onPressed: () => _showAddOfficerDialog(), child: const Icon(Icons.add)),
+    );
+  }
+
+  Widget _buildOfficerCard(OfficerEntity officer) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        leading: CircleAvatar(backgroundColor: AppColors.secondary.withOpacity(0.1), child: const Icon(Icons.person, color: AppColors.secondary)),
+        title: Text(officer.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text('${officer.rank} • ${officer.personalNumber}'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => context.push('/party-items', extra: {'officerId': officer.id, 'officerName': officer.name}),
       ),
     );
   }
 
-  void _showAddOfficerDialog(BuildContext context) {
-    final nameController = TextEditingController();
-    final rankController = TextEditingController();
-    final pnController = TextEditingController();
+  void _showAddOfficerDialog() {
+    final nameCtrl = TextEditingController();
+    final rankCtrl = TextEditingController();
+    final pNoCtrl = TextEditingController();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Register Officer'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: rankController,
-              decoration: const InputDecoration(labelText: 'Rank'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: pnController,
-              decoration: const InputDecoration(labelText: 'Personal Number'),
-            ),
-          ],
-        ),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Officer'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name'), autofocus: true),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(controller: rankCtrl, decoration: const InputDecoration(labelText: 'Rank')),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(controller: pNoCtrl, decoration: const InputDecoration(labelText: 'Personal Number')),
+        ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              final officer = OfficerEntity(
-                id: const Uuid().v4(),
-                name: nameController.text,
-                rank: rankController.text,
-                personalNumber: pnController.text,
-              );
-              ref.read(officerListProvider.notifier).addOfficer(officer);
-              Navigator.pop(context);
-            },
-            child: const Text('Register'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(onPressed: () async {
+            Navigator.pop(ctx);
+            if (nameCtrl.text.isEmpty) return;
+            final officer = OfficerEntity(id: const Uuid().v4(), name: nameCtrl.text, rank: rankCtrl.text, personalNumber: pNoCtrl.text);
+            await ref.read(officerListProvider.notifier).addOfficer(officer);
+          }, child: const Text('Add')),
         ],
       ),
     );

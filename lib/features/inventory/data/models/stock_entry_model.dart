@@ -12,12 +12,12 @@ class StockEntryModel extends StockEntryEntity {
 
   factory StockEntryModel.fromMap(Map<String, dynamic> map) {
     return StockEntryModel(
-      id: map['id'],
-      itemId: map['itemId'],
-      date: DateTime.parse(map['date']),
-      quantity: map['quantity'].toDouble(),
-      unitPrice: map['unitPrice'].toDouble(),
-      supplier: map['supplier'],
+      id: map['id'] as String,
+      itemId: map['itemId'] as String,
+      date: DateTime.parse(map['date'] as String),
+      quantity: (map['quantity'] as num).toDouble(),
+      unitPrice: (map['unitPrice'] as num).toDouble(),
+      supplier: map['supplier'] as String,
     );
   }
 

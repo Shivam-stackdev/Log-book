@@ -2,690 +2,212 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
-import 'package:army_mess_inventory/features/ocr/data/ocr_service.dart';
-import 'package:army_mess_inventory/features/ocr/domain/bill_item.dart';
-import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:army_mess_inventory/core/theme/app_theme.dart';
+import 'package:army_mess_inventory/core/logging/logger.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/providers/inventory_providers.dart';
+import 'package:army_mess_inventory/features/inventory/domain/entities/item_entity.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/stock_entry_entity.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/deduction_entry_entity.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/party_entry_entity.dart';
-import 'package:army_mess_inventory/features/inventory/domain/entities/item_entity.dart';
-import 'package:army_mess_inventory/features/inventory/domain/entities/officer_entity.dart';
+// PartyItemEntity is in party_entry_entity.dart
+import 'package:collection/collection.dart';
+import 'package:uuid/uuid.dart';
+import 'package:intl/intl.dart';
+
+enum BillCategory { officersParty, dailyDeduction, monthlyStockFill }
 
 class OcrScanScreen extends ConsumerStatefulWidget {
   const OcrScanScreen({super.key});
-
   @override
   ConsumerState<OcrScanScreen> createState() => _OcrScanScreenState();
 }
 
 class _OcrScanScreenState extends ConsumerState<OcrScanScreen> {
-  File? _image;
+  final ImagePicker _picker = ImagePicker();
+  File? _imageFile;
+  String _extractedText = '';
   bool _isProcessing = false;
-  List<BillItem> _extractedItems = [];
-  final OcrService _ocrService = OcrService();
-  
-  // Controllers for the editable table
-  final List<TextEditingController> _nameControllers = [];
-  final List<TextEditingController> _qtyControllers = [];
-  final List<TextEditingController> _rateControllers = [];
-  final List<TextEditingController> _unitControllers = [];
-
-  @override
-  void dispose() {
-    _ocrService.dispose();
-    for (var c in _nameControllers) c.dispose();
-    for (var c in _qtyControllers) c.dispose();
-    for (var c in _rateControllers) c.dispose();
-    for (var c in _unitControllers) c.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickImage(ImageSource source) async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(
-      source: source,
-      imageQuality: 85,
-      maxWidth: 1200,
-    );
-
-    if (pickedFile != null) {
-      setState(() {
-        _image = File(pickedFile.path);
-        _isProcessing = true;
-      });
-
-      try {
-        final items = await _ocrService.processImage(pickedFile.path);
-        
-        // Clear old controllers
-        for (var c in _nameControllers) c.dispose();
-        for (var c in _qtyControllers) c.dispose();
-        for (var c in _rateControllers) c.dispose();
-        for (var c in _unitControllers) c.dispose();
-        _nameControllers.clear();
-        _qtyControllers.clear();
-        _rateControllers.clear();
-        _unitControllers.clear();
-
-        // Create new controllers
-        for (var item in items) {
-          _nameControllers.add(TextEditingController(text: item.name));
-          _qtyControllers.add(TextEditingController(text: item.quantity.toString()));
-          _rateControllers.add(TextEditingController(text: item.rate.toString()));
-          _unitControllers.add(TextEditingController(text: item.unit));
-        }
-
-        setState(() {
-          _extractedItems = items;
-          _isProcessing = false;
-        });
-      } catch (e) {
-        setState(() => _isProcessing = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('OCR Failed: $e')),
-          );
-        }
-      }
-    }
-  }
+  BillCategory? _selectedCategory;
+  List<OcrItemRow> _detectedItems = [];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const GlassAppBar(title: 'Bill Scanner'),
-      body: Column(
-        children: [
-          if (_image == null)
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.receipt_long, size: 80, color: Colors.grey),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Scan a bill to extract items automatically',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 30),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: () => _pickImage(ImageSource.camera),
-                          icon: const Icon(Icons.camera_alt),
-                          label: const Text('Camera'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        ElevatedButton.icon(
-                          onPressed: () => _pickImage(ImageSource.gallery),
-                          icon: const Icon(Icons.photo_library),
-                          label: const Text('Gallery'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else ...[
-            Container(
-              height: 160,
-              width: double.infinity,
-              margin: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                image: DecorationImage(image: FileImage(_image!), fit: BoxFit.cover),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: CircleAvatar(
-                      backgroundColor: Colors.black54,
-                      radius: 18,
-                      child: IconButton(
-                        icon: const Icon(Icons.close, size: 18, color: Colors.white),
-                        onPressed: () => setState(() {
-                          _image = null;
-                          _extractedItems = [];
-                        }),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (_isProcessing)
-              const Expanded(child: Center(child: CircularProgressIndicator()))
-            else
-              Expanded(
-                child: _buildEditableTable(),
-              ),
-          ],
-        ],
-      ),
-      floatingActionButton: _extractedItems.isNotEmpty
-          ? FloatingActionButton.extended(
-              onPressed: _showCategoryDialog,
-              label: const Text('Save Bill'),
-              icon: const Icon(Icons.save),
-              backgroundColor: Colors.green.shade700,
-            )
-          : null,
-    );
-  }
-
-  Widget _buildEditableTable() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Summary bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.green.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.green.shade200),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.receipt, color: Colors.green.shade700, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  '${_extractedItems.length} items detected',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: Colors.green.shade800),
-                ),
-                const Spacer(),
-                Text(
-                  'Total: ₹${_calculateTotal().toStringAsFixed(2)}',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade800),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Table header
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-            decoration: BoxDecoration(
-              color: Colors.green.shade100,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(8),
-                topRight: Radius.circular(8),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Expanded(flex: 3, child: Text('Item', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                const Expanded(flex: 1, child: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                const Expanded(flex: 1, child: Text('Rate', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                const Expanded(flex: 1, child: Text('Amount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                const SizedBox(width: 36),
-              ],
-            ),
-          ),
-          // Table rows
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.only(bottom: 80),
-              itemCount: _extractedItems.length,
-              itemBuilder: (context, index) {
-                return Container(
-                  decoration: BoxDecoration(
-                    color: index % 2 == 0 ? Colors.white : Colors.grey.shade50,
-                    border: Border(
-                      bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                    child: Row(
-                      children: [
-                        // Item name
-                        Expanded(
-                          flex: 3,
-                          child: TextField(
-                            controller: _nameControllers[index],
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: 4),
-                            ),
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ),
-                        // Quantity
-                        Expanded(
-                          flex: 1,
-                          child: TextField(
-                            controller: _qtyControllers[index],
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: 4),
-                            ),
-                            style: const TextStyle(fontSize: 13),
-                            onChanged: (_) => _onFieldChanged(),
-                          ),
-                        ),
-                        // Rate
-                        Expanded(
-                          flex: 1,
-                          child: TextField(
-                            controller: _rateControllers[index],
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: 4),
-                            ),
-                            style: const TextStyle(fontSize: 13),
-                            onChanged: (_) => _onFieldChanged(),
-                          ),
-                        ),
-                        // Amount (read-only)
-                        Expanded(
-                          flex: 1,
-                          child: Text(
-                            '₹${_calculateItemAmount(index).toStringAsFixed(0)}',
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                          ),
-                        ),
-                        // Delete button
-                        SizedBox(
-                          width: 36,
-                          child: IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                            onPressed: () => _removeItem(index),
-                            padding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+      appBar: AppBar(title: const Text('Bill Scanner')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const Text('Scan a bill to extract items automatically', style: TextStyle(color: AppColors.textSecondary)),
+          const SizedBox(height: 16),
+          _buildImageSelector(),
+          if (_imageFile != null) ...[const SizedBox(height: 16), ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(_imageFile!, height: 200, width: double.infinity, fit: BoxFit.cover))],
+          if (_isProcessing) ...[const SizedBox(height: 16), const Center(child: CircularProgressIndicator())],
+          if (_detectedItems.isNotEmpty && !_isProcessing) ...[const SizedBox(height: 16), _buildItemsTable(), const SizedBox(height: 16), _buildCategorySelector()],
+          if (_detectedItems.isNotEmpty && _selectedCategory != null && !_isProcessing) ...[const SizedBox(height: 16), FilledButton.icon(onPressed: _saveBill, icon: const Icon(Icons.save), label: const Text('Save Bill'))],
+          if (_extractedText.isNotEmpty && _detectedItems.isEmpty && !_isProcessing) ...[const SizedBox(height: 16), const Text('No items detected. Try another image.', style: TextStyle(color: AppColors.warning))],
+        ]),
       ),
     );
   }
 
-  double _calculateItemAmount(int index) {
-    final qty = double.tryParse(_qtyControllers[index].text) ?? 0;
-    final rate = double.tryParse(_rateControllers[index].text) ?? 0;
-    return qty * rate;
+  Widget _buildImageSelector() {
+    return Row(children: [
+      Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.camera_alt), label: const Text('Camera'), onPressed: () => _pickImage(ImageSource.camera))),
+      const SizedBox(width: 12),
+      Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.photo_library), label: const Text('Gallery'), onPressed: () => _pickImage(ImageSource.gallery))),
+    ]);
   }
 
-  double _calculateTotal() {
-    double total = 0;
-    for (int i = 0; i < _extractedItems.length; i++) {
-      total += _calculateItemAmount(i);
+  Widget _buildItemsTable() {
+    return Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(padding: const EdgeInsets.all(12), child: Text('Detected Items (${_detectedItems.length})', style: const TextStyle(fontWeight: FontWeight.w600))),
+      const Divider(height: 1),
+      ..._detectedItems.asMap().entries.map((e) => Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), child: Row(children: [
+        Expanded(child: Text(e.value.name, style: const TextStyle(fontWeight: FontWeight.w500))),
+        SizedBox(width: 60, child: TextField(controller: TextEditingController(text: e.value.quantity.toString()), textAlign: TextAlign.right, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 13), decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 4, horizontal: 6)), onChanged: (v) => e.value.quantity = double.tryParse(v) ?? 0)),
+        const SizedBox(width: 4),
+        SizedBox(width: 80, child: TextField(controller: TextEditingController(text: e.value.rate.toString()), textAlign: TextAlign.right, keyboardType: TextInputType.number, style: const TextStyle(fontSize: 13), decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 4, horizontal: 6)), onChanged: (v) => e.value.rate = double.tryParse(v) ?? 0)),
+        const SizedBox(width: 8),
+        Text('Rs. ${(e.value.quantity * e.value.rate).toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w600)),
+      ]))),
+      Padding(padding: const EdgeInsets.all(12), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        const Text('Total', style: TextStyle(fontWeight: FontWeight.bold)),
+        Text('Rs. ${_detectedItems.fold(0.0, (s, i) => s + (i.quantity * i.rate)).toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+      ])),
+    ]));
+  }
+
+  Widget _buildCategorySelector() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Bill Category:', style: TextStyle(fontWeight: FontWeight.w600)),
+      const SizedBox(height: 8),
+      ...BillCategory.values.map((cat) => RadioListTile<BillCategory>(value: cat, groupValue: _selectedCategory, title: Text(_categoryLabel(cat)), subtitle: Text(_categorySubtitle(cat), style: TextStyle(color: AppColors.textSecondary, fontSize: 12)), onChanged: (v) => setState(() => _selectedCategory = v))),
+    ]);
+  }
+
+  String _categoryLabel(BillCategory cat) => switch (cat) { BillCategory.officersParty => 'Officers Party', BillCategory.dailyDeduction => 'Daily Deduction', BillCategory.monthlyStockFill => 'Per Month Stock Fill' };
+  String _categorySubtitle(BillCategory cat) => switch (cat) { BillCategory.officersParty => 'अफ़सरों की पार्टी', BillCategory.dailyDeduction => 'रोज़ाना कटौती', BillCategory.monthlyStockFill => 'मासिक स्टॉक भरना' };
+
+  Future<void> _pickImage(ImageSource source) async {
+    final image = await _picker.pickImage(source: source);
+    if (image == null) return;
+    setState(() { _imageFile = File(image.path); _extractedText = ''; _detectedItems = []; _selectedCategory = null; });
+    await _performOcr();
+  }
+
+  Future<void> _performOcr() async {
+    if (_imageFile == null) return;
+    setState(() => _isProcessing = true);
+    try {
+      final recognizer = TextRecognizer(options: TextRecognizerOptions(script: TextRecognitionScript.latin));
+      final inputImage = InputImage.fromFile(_imageFile!);
+      final recognizedText = await recognizer.processImage(inputImage);
+      _extractedText = recognizedText.text;
+      AppLogger.i('OCR', 'Extracted ${_extractedText.length} chars');
+      _detectedItems = _parseItemsFromText(_extractedText);
+      AppLogger.i('OCR', 'Detected ${_detectedItems.length} items');
+      setState(() => _isProcessing = false);
+    } catch (e) {
+      AppLogger.e('OCR', 'OCR failed', e);
+      setState(() => _isProcessing = false);
     }
-    return total;
   }
 
-  void _onFieldChanged() {
-    // Only rebuild the summary, not the entire table
-    setState(() {
-      // Minimal rebuild - just updates the summary bar text
+  List<OcrItemRow> _parseItemsFromText(String text) {
+    List<OcrItemRow> items = [];
+    final lines = text.split('\n').where((l) => l.trim().isNotEmpty).toList();
+    for (var line in lines) {
+      final regex = RegExp(r'([A-Za-z]+[A-Za-z\s\.]*?)\s*(\d+\.?\d*)\s*(x|@|×|X|x)\s*(\d+\.?\d*)');
+      final match = regex.firstMatch(line);
+      if (match != null) {
+        items.add(OcrItemRow(name: match.group(1)!.trim(), quantity: double.tryParse(match.group(2)!) ?? 0, rate: double.tryParse(match.group(4)!) ?? 0));
+      }
+    }
+    if (items.isEmpty) {
+      final priceRegex = RegExp(r'([A-Za-z\s\.]+?)\s+(\d+\.?\d*)');
+      for (var line in lines) {
+        final match = priceRegex.firstMatch(line);
+        if (match != null && match.group(1)!.trim().length > 2) {
+          final price = double.tryParse(match.group(2)!) ?? 0;
+          if (price > 0) items.add(OcrItemRow(name: match.group(1)!.trim(), quantity: 1, rate: price));
+        }
+      }
+    }
+    return items;
+  }
+
+  Future<void> _saveBill() async {
+    if (_selectedCategory == null || _detectedItems.isEmpty) return;
+    setState(() => _isProcessing = true);
+    try {
+      switch (_selectedCategory!) {
+        case BillCategory.monthlyStockFill: await _saveAsStockEntries(); break;
+        case BillCategory.dailyDeduction: await _saveAsDeductions(); break;
+        case BillCategory.officersParty: await _saveAsPartyEntry(); break;
+      }
+      setState(() => _isProcessing = false);
+      _showSuccess('Bill saved successfully');
+      setState(() { _detectedItems = []; _selectedCategory = null; _extractedText = ''; });
+    } catch (e) {
+      AppLogger.e('OCR', 'Save failed', e);
+      setState(() => _isProcessing = false);
+      _showError('Failed to save: $e');
+    }
+  }
+
+  Future<void> _saveAsStockEntries() async {
+    final repository = ref.read(inventoryRepositoryProvider);
+    for (var item in _detectedItems) {
+      final allItems = await repository.getItems();
+      allItems.fold((_) => null, (items) {
+        final existing = items.where((i) => i.name.toLowerCase() == item.name.toLowerCase()).firstOrNull;
+        if (existing == null) {
+          final newItem = ItemEntity(id: const Uuid().v4(), name: item.name, unit: 'Kg', currentStock: 0, reorderLevel: 10, category: 'Grocery', rate: item.rate);
+          repository.addItem(newItem).then((r) {
+            r.fold((_) => null, (_) {
+              final entry = StockEntryEntity(id: const Uuid().v4(), itemId: newItem.id, date: DateTime.now(), quantity: item.quantity, unitPrice: item.rate, supplier: 'Bill Import');
+              repository.addStockEntry(entry);
+            });
+          });
+        } else {
+          final entry = StockEntryEntity(id: const Uuid().v4(), itemId: existing.id, date: DateTime.now(), quantity: item.quantity, unitPrice: item.rate, supplier: 'Bill Import');
+          repository.addStockEntry(entry);
+        }
+      });
+    }
+    ref.read(inventoryListProvider.notifier).refresh();
+  }
+
+  Future<void> _saveAsDeductions() async {
+    final repository = ref.read(inventoryRepositoryProvider);
+    final allItems = await repository.getItems();
+    allItems.fold((_) => null, (items) {
+      for (var item in _detectedItems) {
+        final existing = items.where((i) => i.name.toLowerCase() == item.name.toLowerCase()).firstOrNull;
+        if (existing != null) {
+          final entry = DeductionEntryEntity(id: const Uuid().v4(), itemId: existing.id, date: DateTime.now(), quantity: item.quantity, reason: 'Bill Import - Daily Deduction');
+          repository.addDeductionEntry(entry);
+        }
+      }
     });
+    ref.read(inventoryListProvider.notifier).refresh();
   }
 
-  void _removeItem(int index) {
-    setState(() {
-      _extractedItems.removeAt(index);
-      _nameControllers.removeAt(index).dispose();
-      _qtyControllers.removeAt(index).dispose();
-      _rateControllers.removeAt(index).dispose();
-      _unitControllers.removeAt(index).dispose();
-    });
-  }
-
-  void _showCategoryDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Bill Category'),
-        content: const Text('Yeh bill kis chiz ke liye hai? / What is this bill for?'),
-        actions: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.people, color: Colors.purple),
-                title: const Text('Officers Party'),
-                subtitle: const Text('अफ़सरों की पार्टी के लिए'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _handleSave('party');
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.remove_circle, color: Colors.red),
-                title: const Text('Daily Deduction'),
-                subtitle: const Text('रोज़ाना कटौती के लिए'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _handleSave('deduction');
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.inventory_2, color: Colors.blue),
-                title: const Text('Per Month Stock Fill'),
-                subtitle: const Text('मासिक स्टॉक भरने के लिए'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _handleSave('stock');
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleSave(String category) async {
-    // Collect updated items from controllers
-    final List<BillItem> finalItems = [];
-    for (int i = 0; i < _extractedItems.length; i++) {
-      final name = _nameControllers[i].text.trim();
-      final qty = double.tryParse(_qtyControllers[i].text) ?? 0;
-      final rate = double.tryParse(_rateControllers[i].text) ?? 0;
-      final unit = _unitControllers[i].text.trim().isNotEmpty 
-          ? _unitControllers[i].text.trim() 
-          : 'unit';
-      
-      if (name.isNotEmpty && qty > 0) {
-        finalItems.add(BillItem(
-          name: name,
-          quantity: qty,
-          unit: unit,
-          rate: rate,
-          amount: qty * rate,
-        ));
-      }
+  Future<void> _saveAsPartyEntry() async {
+    final repository = ref.read(officerRepositoryProvider);
+    final totalAmount = _detectedItems.fold(0.0, (s, i) => s + (i.quantity * i.rate));
+    final entry = PartyEntryEntity(id: const Uuid().v4(), officerId: 'general', date: DateTime.now(), amount: totalAmount, description: 'Bill Import - ${DateFormat('dd MMM yyyy').format(DateTime.now())}');
+    await repository.addPartyEntry(entry);
+    for (var item in _detectedItems) {
+      final partyItem = PartyItemEntity(id: const Uuid().v4(), partyEntryId: entry.id, itemName: item.name, quantity: item.quantity, rate: item.rate, amount: item.quantity * item.rate, unit: 'pcs');
+      await repository.addPartyItem(partyItem);
     }
-
-    if (finalItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No valid items to save')),
-      );
-      return;
-    }
-
-    if (category == 'party') {
-      await _saveToParty(finalItems);
-    } else if (category == 'deduction') {
-      await _saveToDeduction(finalItems);
-    } else {
-      await _saveToStock(finalItems);
-    }
+    AppLogger.i('OCR', 'Party entry saved with ${_detectedItems.length} items');
   }
 
-  Future<void> _saveToStock(List<BillItem> items) async {
-    final supplierController = TextEditingController();
-    
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Stock Fill Details'),
-        content: TextField(
-          controller: supplierController,
-          decoration: const InputDecoration(labelText: 'Supplier Name'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final repository = ref.read(inventoryRepositoryProvider);
-      final supplier = supplierController.text.trim().isEmpty ? 'Unknown' : supplierController.text.trim();
-      
-      for (var item in items) {
-        // Find or create item first
-        final existingItems = await repository.getItems();
-        String itemId = '';
-        
-        existingItems.fold((_) => null, (list) {
-          final found = list.where((e) => e.name.toLowerCase() == item.name.toLowerCase());
-          if (found.isNotEmpty) {
-            itemId = found.first.id;
-          }
-        });
-
-        if (itemId.isEmpty) {
-          itemId = const Uuid().v4();
-          await repository.addItem(ItemEntity(
-            id: itemId,
-            name: item.name,
-            unit: item.unit,
-            currentStock: 0,
-            reorderLevel: 5,
-            category: 'General',
-          ));
-        }
-
-        await repository.addStockEntry(StockEntryEntity(
-          id: const Uuid().v4(),
-          itemId: itemId,
-          date: DateTime.now(),
-          quantity: item.quantity,
-          unitPrice: item.rate,
-          supplier: supplier,
-        ));
-      }
-      
-      ref.read(inventoryListProvider.notifier).loadItems();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Stock updated successfully')),
-        );
-        setState(() {
-          _image = null;
-          _extractedItems = [];
-        });
-      }
-    }
-  }
-
-  Future<void> _saveToDeduction(List<BillItem> items) async {
-    final reasonController = TextEditingController(text: 'Daily Mess Deduction');
-    
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Deduction Details'),
-        content: TextField(
-          controller: reasonController,
-          decoration: const InputDecoration(labelText: 'Reason'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final repository = ref.read(inventoryRepositoryProvider);
-      final reason = reasonController.text.trim();
-      
-      for (var item in items) {
-        final existingItems = await repository.getItems();
-        String itemId = '';
-        
-        existingItems.fold((_) => null, (list) {
-          final found = list.where((e) => e.name.toLowerCase() == item.name.toLowerCase());
-          if (found.isNotEmpty) {
-            itemId = found.first.id;
-          }
-        });
-
-        if (itemId.isNotEmpty) {
-          await repository.addDeductionEntry(DeductionEntryEntity(
-            id: const Uuid().v4(),
-            itemId: itemId,
-            date: DateTime.now(),
-            quantity: item.quantity,
-            reason: reason,
-          ));
-        }
-      }
-      
-      ref.read(inventoryListProvider.notifier).loadItems();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Deduction recorded successfully')),
-        );
-        setState(() {
-          _image = null;
-          _extractedItems = [];
-        });
-      }
-    }
-  }
-
-  Future<void> _saveToParty(List<BillItem> items) async {
-    final officersAsync = ref.read(officerListProvider);
-    OfficerEntity? selectedOfficer;
-    final List<OfficerEntity> allOfficers = [];
-    
-    officersAsync.when(
-      data: (officers) {
-        allOfficers.clear();
-        allOfficers.addAll(officers);
-      },
-      loading: () {},
-      error: (_, __) {},
-    );
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Select Officer'),
-          content: allOfficers.isEmpty
-              ? const Text('No officers registered. Please add officers first.')
-              : SizedBox(
-                  height: 300,
-                  child: ListView.builder(
-                    itemCount: allOfficers.length,
-                    itemBuilder: (context, index) {
-                      final officer = allOfficers[index];
-                      return RadioListTile<OfficerEntity>(
-                        value: officer,
-                        groupValue: selectedOfficer,
-                        title: Text('${officer.rank} ${officer.name}'),
-                        subtitle: Text('PN: ${officer.personalNumber}'),
-                        onChanged: (val) => setDialogState(() => selectedOfficer = val),
-                      );
-                    },
-                  ),
-                ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            TextButton(
-              onPressed: selectedOfficer != null ? () => Navigator.pop(context, true) : null,
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (confirmed == true && selectedOfficer != null) {
-      final partyRepo = ref.read(officerRepositoryProvider);
-      final inventoryRepo = ref.read(inventoryRepositoryProvider);
-      double totalAmount = items.fold(0, (sum, item) => sum + item.amount);
-      final partyEntryId = const Uuid().v4();
-      
-      // Create party entry
-      await partyRepo.addPartyEntry(PartyEntryEntity(
-        id: partyEntryId,
-        officerId: selectedOfficer!.id,
-        date: DateTime.now(),
-        amount: totalAmount,
-        description: 'Bill Scan: ${items.length} items',
-      ));
-      
-      // Also save individual party items to the new table
-      final db = (ref.read(databaseHelperProvider));
-      final database = await db.database;
-      
-      for (var item in items) {
-        await database.insert('party_items', {
-          'id': const Uuid().v4(),
-          'partyEntryId': partyEntryId,
-          'itemName': item.name,
-          'quantity': item.quantity,
-          'rate': item.rate,
-          'amount': item.amount,
-          'unit': item.unit,
-        });
-      }
-      
-      // Also create deduction entries for stock management
-      for (var item in items) {
-        final existingItems = await inventoryRepo.getItems();
-        String itemId = '';
-        
-        existingItems.fold((_) => null, (list) {
-          final found = list.where((e) => e.name.toLowerCase() == item.name.toLowerCase());
-          if (found.isNotEmpty) {
-            itemId = found.first.id;
-          }
-        });
-
-        if (itemId.isNotEmpty) {
-          await inventoryRepo.addDeductionEntry(DeductionEntryEntity(
-            id: const Uuid().v4(),
-            itemId: itemId,
-            date: DateTime.now(),
-            quantity: item.quantity,
-            reason: 'Party - ${selectedOfficer.name}',
-          ));
-        }
-      }
-      
-      ref.read(inventoryListProvider.notifier).loadItems();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Party expense recorded successfully with all items')),
-        );
-        setState(() {
-          _image = null;
-          _extractedItems = [];
-        });
-      }
-    }
-  }
+  void _showSuccess(String message) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: AppColors.success)); }
+  void _showError(String message) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: AppColors.error)); }
 }
+
+class OcrItemRow { String name; double quantity; double rate; OcrItemRow({required this.name, required this.quantity, required this.rate}); }

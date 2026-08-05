@@ -11,11 +11,11 @@ class DeductionEntryModel extends DeductionEntryEntity {
 
   factory DeductionEntryModel.fromMap(Map<String, dynamic> map) {
     return DeductionEntryModel(
-      id: map['id'],
-      itemId: map['itemId'],
-      date: DateTime.parse(map['date']),
-      quantity: map['quantity'].toDouble(),
-      reason: map['reason'],
+      id: map['id'] as String,
+      itemId: map['itemId'] as String,
+      date: DateTime.parse(map['date'] as String),
+      quantity: (map['quantity'] as num).toDouble(),
+      reason: map['reason'] as String,
     );
   }
 
