@@ -24,16 +24,20 @@ if (flutterVersionName == null) {
 
 android {
     namespace "com.example.army_mess_inventory"
-    compileSdk 34
+    // Several plugins (camera_android_camerax, image_picker_android,
+    // shared_preferences_android, sqflite_android, flutter_plugin_android_lifecycle)
+    // require a modern compileSdk. Keep this in sync with `sharedCompileSdk`
+    // declared in android/build.gradle.
+    compileSdk rootProject.ext.sharedCompileSdk
     ndkVersion flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = '17'
     }
 
     sourceSets {
@@ -42,8 +46,10 @@ android {
 
     defaultConfig {
         applicationId "com.example.army_mess_inventory"
-        minSdk 23
-        targetSdk 34
+        // Plugin manifests declare minSdkVersion 24, so the app cannot stay on
+        // 21/23 (manifest merger would fail). Kept in sync with `sharedMinSdk`.
+        minSdk rootProject.ext.sharedMinSdk
+        targetSdk rootProject.ext.sharedTargetSdk
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
 
@@ -53,6 +59,10 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.debug
+            // Flutter enables R8 for release builds; these rules keep it from
+            // failing on the optional ML Kit language models that are not
+            // bundled (only TextRecognitionScript.latin is used).
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }

@@ -1,18 +1,66 @@
+// Single source of truth for the Android SDK levels used by the app module
+// *and* by every Flutter plugin module. Declared before any sub-project is
+// evaluated so `android/app/build.gradle` can read it too.
+ext {
+    sharedCompileSdk = 36
+    sharedTargetSdk = 35
+    sharedMinSdk = 24
+}
 allprojects {
     repositories {
         google()
         mavenCentral()
     }
 }
-
 rootProject.buildDir = '../build'
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
+// ---------------------------------------------------------------------------
+// Normalise the Android configuration of every plugin sub-project.
+//
+// Why this is needed:
+//   `printing` (and a few other pub packages) still hard-code an old
+//   `compileSdkVersion` in their own android/build.gradle. Modern AndroidX
+//   artifacts pulled in transitively reference attributes that only exist
+//   from API 31 onwards, so AAPT2 fails while linking that library's
+//   resources:
+//
+//     Execution failed for task ':printing:verifyReleaseResources'.
+//     > Android resource linking failed
+//         AAPT: error: resource android:attr/lStar not found.
+//
+// Forcing every Android sub-project onto the same (modern) compileSdk removes
+// that whole class of failure, and raising stale minSdk values keeps the
+// manifest merger happy.
+//
+// NOTE: this block must stay *above* the `evaluationDependsOn(':app')` block
+// below. That block evaluates `:app` immediately, and Gradle refuses a later
+// `afterEvaluate {}` registration on an already evaluated project
+// ("Cannot run Project.afterEvaluate(Closure) when the project is already
+// evaluated").
+// ---------------------------------------------------------------------------
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty("android")) {
+            project.android {
+                compileSdk = rootProject.ext.sharedCompileSdk
+                if (namespace == null) {
+                    namespace = project.group.toString()
+                }
+                defaultConfig {
+                    def currentMinSdk = (minSdk == null) ? 0 : minSdk
+                    if (currentMinSdk < rootProject.ext.sharedMinSdk) {
+                        minSdk = rootProject.ext.sharedMinSdk
+                    }
+                }
+            }
+        }
+    }
+}
 subprojects {
     project.evaluationDependsOn(':app')
 }
-
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
