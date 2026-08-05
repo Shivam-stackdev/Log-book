@@ -6,6 +6,7 @@ on:
       - fix/gradle-plugin-versions
       - main
       - master
+      - genspark_2
   pull_request:
     branches:
       - main
