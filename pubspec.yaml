@@ -1,6 +1,6 @@
 name: army_mess_inventory
 description: A production-ready Army Mess Inventory Management application.
-version: 2.0.0+2
+version: 3.0.0+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

@@ -22,6 +22,15 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
   bool _showDropdown = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(transactionChangeProvider).loadTodayTransactions();
+      ref.read(inventoryChangeProvider).loadItems();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final inventoryProvider = ref.watch(inventoryChangeProvider);
     final transactionProvider = ref.watch(transactionChangeProvider);
@@ -119,6 +128,10 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
   }
 
   Widget _buildSearchableDropdown(List<ItemEntity> items, bool isDark) {
+    final activeItem = _selectedItem != null
+        ? (items.where((i) => i.id == _selectedItem!.id).firstOrNull ?? _selectedItem)
+        : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -140,11 +153,11 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    _selectedItem != null
-                        ? '${_selectedItem!.name} (${_selectedItem!.currentStock.toStringAsFixed(1)} ${_selectedItem!.unit})'
+                    activeItem != null
+                        ? '${activeItem.name} (${activeItem.currentStock.toStringAsFixed(1)} ${activeItem.unit})'
                         : 'Select Item',
                     style: TextStyle(
-                      color: _selectedItem != null
+                      color: activeItem != null
                           ? (isDark ? Colors.white : Colors.black87)
                           : (isDark ? Colors.white54 : Colors.black54),
                     ),
@@ -262,6 +275,11 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
       return;
     }
 
+    final inventoryProvider = ref.read(inventoryChangeProvider);
+    final item = inventoryProvider.getItemById(_selectedItem!.id) ?? _selectedItem!;
+    final itemName = item.name;
+    final itemUnit = item.unit;
+
     final quantity = double.tryParse(_quantityController.text) ?? 0;
     if (quantity <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -270,37 +288,57 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
       return;
     }
 
-    if (quantity > _selectedItem!.currentStock) {
+    if (quantity > item.currentStock) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Insufficient stock!')),
+        SnackBar(content: Text('Insufficient stock! Only ${item.currentStock.toStringAsFixed(1)} $itemUnit available.')),
       );
       return;
     }
 
-    final cost = quantity * _selectedItem!.unitCost;
+    final cost = quantity * item.unitCost;
 
     final transaction = TransactionEntity(
       id: const Uuid().v4(),
-      itemId: _selectedItem!.id,
-      itemName: _selectedItem!.name,
+      itemId: item.id,
+      itemName: itemName,
       quantity: quantity,
       type: 'deduction',
-      reason: _reasonController.text.isEmpty ? 'Daily Messing' : _reasonController.text,
+      reason: _reasonController.text.trim().isEmpty ? 'Daily Messing' : _reasonController.text.trim(),
       date: DateTime.now(),
       cost: cost,
-      unitPrice: _selectedItem!.unitCost,
+      unitPrice: item.unitCost,
     );
 
-    final success = await ref.read(transactionChangeProvider).addTransaction(transaction);
-    if (success) {
-      await ref.read(inventoryChangeProvider).loadItems();
-      await ref.read(dashboardChangeProvider).refresh();
+    // Reset local selection & form state BEFORE calling async reloads
+    _quantityController.clear();
+    setState(() {
+      _selectedItem = null;
+      _showDropdown = false;
+    });
+
+    try {
+      final success = await ref.read(transactionChangeProvider).addTransaction(transaction);
+      if (success) {
+        await ref.read(inventoryChangeProvider).loadItems();
+        await ref.read(dashboardChangeProvider).refresh();
+        await ref.read(transactionChangeProvider).loadTodayTransactions();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Deducted ${quantity.toStringAsFixed(1)} $itemUnit of $itemName')),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to record deduction')),
+          );
+        }
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Deducted ${quantity.toStringAsFixed(1)} ${_selectedItem!.unit} of ${_selectedItem!.name}')),
+          SnackBar(content: Text('Error recording deduction: $e')),
         );
-        _quantityController.clear();
-        setState(() => _selectedItem = null);
       }
     }
   }
