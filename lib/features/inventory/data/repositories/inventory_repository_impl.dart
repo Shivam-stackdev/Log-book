@@ -91,17 +91,24 @@ class InventoryRepositoryImpl implements InventoryRepository {
       await db.transaction((txn) async {
         await txn.insert('transactions', model.toMap());
 
+        int updatedRows;
         if (transaction.type == 'addition') {
-          await txn.execute(
+          updatedRows = await txn.rawUpdate(
             'UPDATE items SET currentStock = currentStock + ?, unitCost = ? WHERE id = ?',
             [transaction.quantity, transaction.unitPrice, transaction.itemId],
           );
         } else {
-          // deduction or party
-          await txn.execute(
-            'UPDATE items SET currentStock = currentStock - ? WHERE id = ?',
-            [transaction.quantity, transaction.itemId],
+          // Deduction/party transactions must update the stock row atomically.
+          // If no row is affected, rollback the transaction instead of showing
+          // success while the inventory quantity stays unchanged.
+          updatedRows = await txn.rawUpdate(
+            'UPDATE items SET currentStock = currentStock - ? WHERE id = ? AND currentStock >= ?',
+            [transaction.quantity, transaction.itemId, transaction.quantity],
           );
+        }
+
+        if (updatedRows != 1) {
+          throw StateError('Stock update failed for item ${transaction.itemId}');
         }
       });
 

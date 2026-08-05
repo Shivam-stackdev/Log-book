@@ -18,6 +18,14 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
   String _searchQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(inventoryChangeProvider).loadItems();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final inventoryProvider = ref.watch(inventoryChangeProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
