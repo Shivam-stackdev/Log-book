@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:intl/intl.dart';
 import 'package:army_mess_inventory/main.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
+import 'package:army_mess_inventory/core/utils/app_localizations.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -13,13 +14,15 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dashboard = ref.watch(dashboardChangeProvider);
     final theme = ref.watch(themeChangeProvider);
+    final localeProvider = ref.watch(localeChangeProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations(localeProvider.locale);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(
-          'Army Mess Inventory',
+          l10n.translate('app_name'),
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: isDark ? Colors.white : Colors.black87,
@@ -71,7 +74,7 @@ class DashboardScreen extends ConsumerWidget {
                   _buildStatsGrid(context, dashboard),
                   const SizedBox(height: 30),
                   Text(
-                    'Quick Actions',
+                    l10n.translate('quick_actions'),
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -92,11 +95,13 @@ class DashboardScreen extends ConsumerWidget {
 
   Widget _buildHeader(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final localeProvider = ProviderScope.containerOf(context).read(localeChangeProvider);
+    final l10n = AppLocalizations(localeProvider.locale);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Welcome, Quartermaster',
+          l10n.translate('welcome'),
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -186,6 +191,8 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   Widget _buildActionGrid(BuildContext context) {
+    final localeProvider = ProviderScope.containerOf(context).read(localeChangeProvider);
+    final l10n = AppLocalizations(localeProvider.locale);
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -193,12 +200,12 @@ class DashboardScreen extends ConsumerWidget {
       crossAxisSpacing: 15,
       mainAxisSpacing: 15,
       children: [
-        _buildActionCard(context, 'Stock Management', 'Manage inventory items', Icons.list_alt, '/stock'),
-        _buildActionCard(context, 'Daily Deduction', 'Record daily usage', Icons.remove_circle_outline, '/deduction'),
-        _buildActionCard(context, 'Officer Party', 'Manage party bills', Icons.celebration, '/party'),
-        _buildActionCard(context, 'Party Orders', 'Pre-party ordering', Icons.shopping_bag_outlined, '/party-orders'),
-        _buildActionCard(context, 'OCR Bill Scan', 'Import bills auto', Icons.document_scanner, '/ocr'),
-        _buildActionCard(context, 'Reports', 'View analytics', Icons.analytics, '/reports'),
+        _buildActionCard(context, l10n.translate('stock_management'), l10n.translate('manage_inventory'), Icons.list_alt, '/stock'),
+        _buildActionCard(context, l10n.translate('daily_deduction'), l10n.translate('record_usage'), Icons.remove_circle_outline, '/deduction'),
+        _buildActionCard(context, l10n.translate('officer_party'), l10n.translate('manage_party_bills'), Icons.celebration, '/party'),
+        _buildActionCard(context, l10n.translate('party_orders'), l10n.translate('pre_party_ordering'), Icons.shopping_bag_outlined, '/party-orders'),
+        _buildActionCard(context, l10n.translate('ocr_bill_scan'), l10n.translate('import_bills_auto'), Icons.document_scanner, '/ocr'),
+        _buildActionCard(context, l10n.translate('reports'), l10n.translate('view_analytics'), Icons.analytics, '/reports'),
       ],
     );
   }
@@ -252,6 +259,8 @@ class DashboardScreen extends ConsumerWidget {
 
   Widget _buildBottomNav(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final localeProvider = ProviderScope.containerOf(context).read(localeChangeProvider);
+    final l10n = AppLocalizations(localeProvider.locale);
 
     return ClipRRect(
       child: BackdropFilter(
@@ -260,11 +269,11 @@ class DashboardScreen extends ConsumerWidget {
           backgroundColor: isDark
               ? const Color(0xFF1A1A2E).withValues(alpha: 0.9)
               : Colors.white.withValues(alpha: 0.9),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.dashboard), label: 'Home'),
-            NavigationDestination(icon: Icon(Icons.analytics), label: 'Reports'),
-            NavigationDestination(icon: Icon(Icons.history), label: 'History'),
-            NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
+          destinations: [
+            NavigationDestination(icon: const Icon(Icons.dashboard), label: l10n.translate('home')),
+            NavigationDestination(icon: const Icon(Icons.analytics), label: l10n.translate('reports')),
+            NavigationDestination(icon: const Icon(Icons.history), label: l10n.translate('history')),
+            NavigationDestination(icon: const Icon(Icons.settings), label: l10n.translate('settings')),
           ],
           onDestinationSelected: (index) {
             if (index == 1) context.push('/reports');

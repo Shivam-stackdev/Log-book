@@ -10,6 +10,8 @@ import 'package:army_mess_inventory/providers/party_provider.dart';
 import 'package:army_mess_inventory/providers/order_provider.dart';
 import 'package:army_mess_inventory/providers/dashboard_provider.dart';
 import 'package:army_mess_inventory/providers/theme_provider.dart';
+import 'package:army_mess_inventory/providers/locale_provider.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 // Global providers using Riverpod for DI
 final repositoryProvider = Provider((ref) {
@@ -43,6 +45,10 @@ final themeChangeProvider = ChangeNotifierProvider((ref) {
   return ThemeProvider();
 });
 
+final localeChangeProvider = ChangeNotifierProvider((ref) {
+  return LocaleProvider();
+});
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
@@ -58,12 +64,23 @@ class ArmyMessApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeProvider = ref.watch(themeChangeProvider);
+    final localeProvider = ref.watch(localeChangeProvider);
 
     return MaterialApp.router(
       title: 'Army Mess Inventory',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeProvider.themeMode,
+      locale: localeProvider.locale,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en'),
+        Locale('hi'),
+      ],
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
     );

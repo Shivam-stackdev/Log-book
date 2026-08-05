@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:army_mess_inventory/main.dart';
 import 'package:army_mess_inventory/features/backup/data/backup_service.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
+import 'package:army_mess_inventory/core/utils/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -11,17 +12,19 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeProvider = ref.watch(themeChangeProvider);
+    final localeProvider = ref.watch(localeChangeProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final backupService = BackupService();
+    final l10n = AppLocalizations(localeProvider.locale);
 
     return Scaffold(
-      appBar: const GlassAppBar(title: 'Settings'),
+      appBar: GlassAppBar(title: l10n.translate('settings')),
       body: ListView(
         padding: const EdgeInsets.all(20.0),
         children: [
           // Appearance Section
           Text(
-            'Appearance',
+            l10n.translate('appearance'),
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
@@ -30,16 +33,58 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Card(
-            child: SwitchListTile(
-              secondary: Icon(
-                isDark ? Icons.dark_mode : Icons.light_mode,
-                color: isDark ? Colors.amber : Colors.blueGrey,
-              ),
-              title: const Text('Dark Mode'),
-              subtitle: Text(isDark ? 'Dark theme enabled' : 'Light theme enabled'),
-              value: themeProvider.isDarkMode,
-              onChanged: (val) => themeProvider.setDarkMode(val),
-              activeColor: Colors.green,
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: Icon(
+                    isDark ? Icons.dark_mode : Icons.light_mode,
+                    color: isDark ? Colors.amber : Colors.blueGrey,
+                  ),
+                  title: Text(l10n.translate('dark_mode')),
+                  subtitle: Text(isDark ? l10n.translate('dark_theme_enabled') : l10n.translate('light_theme_enabled')),
+                  value: themeProvider.isDarkMode,
+                  onChanged: (val) => themeProvider.setDarkMode(val),
+                  activeColor: Colors.green,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Language Section
+          Text(
+            l10n.translate('language'),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white54 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                RadioListTile<String>(
+                  title: Text(l10n.translate('english')),
+                  value: 'en',
+                  groupValue: localeProvider.locale.languageCode,
+                  onChanged: (val) {
+                    if (val != null) localeProvider.setLocale(Locale(val));
+                  },
+                  secondary: const Icon(Icons.language, color: Colors.blue),
+                ),
+                const Divider(height: 1),
+                RadioListTile<String>(
+                  title: Text(l10n.translate('hindi')),
+                  value: 'hi',
+                  groupValue: localeProvider.locale.languageCode,
+                  onChanged: (val) {
+                    if (val != null) localeProvider.setLocale(Locale(val));
+                  },
+                  secondary: const Icon(Icons.translate, color: Colors.orange),
+                ),
+              ],
             ),
           ),
 
@@ -47,7 +92,7 @@ class SettingsScreen extends ConsumerWidget {
 
           // Data Section
           Text(
-            'Data & History',
+            l10n.translate('data_history'),
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
@@ -60,7 +105,7 @@ class SettingsScreen extends ConsumerWidget {
               children: [
                 ListTile(
                   leading: const Icon(Icons.calendar_month, color: Colors.purple),
-                  title: const Text('Monthly History'),
+                  title: Text(l10n.translate('monthly_history')),
                   subtitle: const Text('View monthly consumption & cost breakdown'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/monthly-history'),
@@ -68,7 +113,7 @@ class SettingsScreen extends ConsumerWidget {
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.history, color: Colors.blue),
-                  title: const Text('All Transactions'),
+                  title: Text(l10n.translate('all_transactions')),
                   subtitle: const Text('View complete transaction history'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/history'),
@@ -81,7 +126,7 @@ class SettingsScreen extends ConsumerWidget {
 
           // Backup Section
           Text(
-            'Backup & Restore',
+            l10n.translate('backup_restore'),
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
@@ -97,7 +142,7 @@ class SettingsScreen extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Backups include all inventory data, party records, orders, and transaction history.',
+                    l10n.translate('backup_info'),
                     style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54),
                   ),
                 ),
@@ -110,15 +155,15 @@ class SettingsScreen extends ConsumerWidget {
               children: [
                 ListTile(
                   leading: const Icon(Icons.cloud_upload, color: Colors.green),
-                  title: const Text('Create Backup'),
-                  subtitle: const Text('Export database to a file and share'),
+                  title: Text(l10n.translate('create_backup')),
+                  subtitle: Text(l10n.translate('export_backup')),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () async {
                     try {
                       await backupService.createBackup();
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Backup created successfully')),
+                          SnackBar(content: Text(l10n.translate('create_backup') + ' successful')),
                         );
                       }
                     } catch (e) {
@@ -133,8 +178,8 @@ class SettingsScreen extends ConsumerWidget {
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.settings_backup_restore, color: Colors.orange),
-                  title: const Text('Restore Data'),
-                  subtitle: const Text('Import database from a backup file'),
+                  title: Text(l10n.translate('restore_data')),
+                  subtitle: Text(l10n.translate('import_backup')),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -150,7 +195,7 @@ class SettingsScreen extends ConsumerWidget {
 
           // About Section
           Text(
-            'About',
+            l10n.translate('about'),
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
@@ -161,8 +206,8 @@ class SettingsScreen extends ConsumerWidget {
           Card(
             child: ListTile(
               leading: const Icon(Icons.military_tech, color: Colors.amber),
-              title: const Text('Army Mess Inventory'),
-              subtitle: const Text('Version 2.0.0'),
+              title: Text(l10n.translate('app_name')),
+              subtitle: Text(l10n.translate('version')),
             ),
           ),
         ],
