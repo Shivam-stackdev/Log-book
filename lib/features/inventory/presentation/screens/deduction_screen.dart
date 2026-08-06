@@ -14,12 +14,28 @@ class DeductionScreen extends ConsumerStatefulWidget {
   ConsumerState<DeductionScreen> createState() => _DeductionScreenState();
 }
 
+class _PendingDeduction {
+  final ItemEntity item;
+  final double quantity;
+  final String reason;
+
+  const _PendingDeduction({
+    required this.item,
+    required this.quantity,
+    required this.reason,
+  });
+
+  double get cost => quantity * item.unitCost;
+}
+
 class _DeductionScreenState extends ConsumerState<DeductionScreen> {
   ItemEntity? _selectedItem;
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _reasonController = TextEditingController(text: 'Daily Messing');
   final TextEditingController _searchController = TextEditingController();
+  final List<_PendingDeduction> _pendingDeductions = [];
   bool _showDropdown = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -28,6 +44,14 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
       ref.read(transactionChangeProvider).loadTodayTransactions();
       ref.read(inventoryChangeProvider).loadItems();
     });
+  }
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    _reasonController.dispose();
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -47,90 +71,135 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Record Consumption',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Searchable Item Dropdown
-            _buildSearchableDropdown(inventoryProvider.items, isDark),
-            const SizedBox(height: 20),
-
-            TextField(
-              controller: _quantityController,
-              decoration: InputDecoration(
-                labelText: 'Quantity',
-                suffixText: _selectedItem?.unit ?? '',
-              ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _reasonController,
-              decoration: const InputDecoration(labelText: 'Reason/Event'),
-            ),
-
-            if (_selectedItem != null) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: ListView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                   children: [
-                    const Icon(Icons.info_outline, size: 20),
-                    const SizedBox(width: 8),
                     Text(
-                      'Available: ${_selectedItem!.currentStock.toStringAsFixed(1)} ${_selectedItem!.unit}',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    if (_selectedItem!.unitCost > 0) ...[
-                      const Spacer(),
-                      Text(
-                        'Rs ${_selectedItem!.unitCost.toStringAsFixed(2)}/${_selectedItem!.unit}',
-                        style: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+                      'Record Consumption',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Add multiple items to the batch, then save them together. The page stays open for continuous daily deductions.',
+                      style: TextStyle(color: isDark ? Colors.white60 : Colors.black54),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Searchable Item Dropdown
+                    _buildSearchableDropdown(inventoryProvider.items, isDark),
+                    const SizedBox(height: 20),
+
+                    TextField(
+                      controller: _quantityController,
+                      decoration: InputDecoration(
+                        labelText: 'Quantity',
+                        suffixText: _selectedItem?.unit ?? '',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: _reasonController,
+                      decoration: const InputDecoration(labelText: 'Reason/Event'),
+                    ),
+
+                    if (_selectedItem != null) ...[
+                      const SizedBox(height: 16),
+                      _buildSelectedItemInfo(_selectedItem!, isDark),
                     ],
+
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.playlist_add),
+                      onPressed: _isSaving ? null : _addCurrentEntryToBatch,
+                      label: const Text('Add Item to Deduction List'),
+                    ),
+
+                    const SizedBox(height: 20),
+                    _buildPendingDeductions(isDark),
+                    const SizedBox(height: 16),
+
+                    // Today's deductions summary
+                    _buildTodaySummary(transactionProvider, isDark),
                   ],
                 ),
               ),
-            ],
-
-            const Spacer(),
-
-            // Today's deductions summary
-            _buildTodaySummary(transactionProvider, isDark),
-            const SizedBox(height: 16),
-
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                onPressed: _isSaving ? null : _saveDeductionBatch,
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(
+                        _pendingDeductions.isEmpty
+                            ? 'Confirm Current Deduction'
+                            : 'Confirm ${_pendingDeductions.length} Deductions',
+                        style: const TextStyle(fontSize: 18),
+                      ),
               ),
-              onPressed: _saveDeduction,
-              child: const Text('Confirm Deduction', style: TextStyle(fontSize: 18)),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
+  Widget _buildSelectedItemInfo(ItemEntity selectedItem, bool isDark) {
+    final item = _freshItem(selectedItem) ?? selectedItem;
+    final reserved = _reservedQuantityFor(item.id);
+    final availableAfterBatch = item.currentStock - reserved;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Available: ${item.currentStock.toStringAsFixed(1)} ${item.unit}'
+              '${reserved > 0 ? ' | In batch: ${reserved.toStringAsFixed(1)} | Left: ${availableAfterBatch.toStringAsFixed(1)}' : ''}',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          if (item.unitCost > 0)
+            Text(
+              'Rs ${item.unitCost.toStringAsFixed(2)}/${item.unit}',
+              style: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSearchableDropdown(List<ItemEntity> items, bool isDark) {
-    final activeItem = _selectedItem != null
-        ? (items.where((i) => i.id == _selectedItem!.id).firstOrNull ?? _selectedItem)
-        : null;
+    final activeItem = _selectedItem != null ? (_freshItem(_selectedItem!) ?? _selectedItem) : null;
+    final query = _searchController.text.trim().toLowerCase();
+    final filteredItems = items
+        .where((item) => item.name.toLowerCase().contains(query) || item.category.toLowerCase().contains(query))
+        .take(80)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -141,9 +210,7 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               border: Border.all(
-                color: _showDropdown
-                    ? Colors.green
-                    : (isDark ? Colors.white24 : Colors.grey.shade300),
+                color: _showDropdown ? Colors.green : (isDark ? Colors.white24 : Colors.grey.shade300),
                 width: _showDropdown ? 2 : 1,
               ),
               borderRadius: BorderRadius.circular(12),
@@ -174,7 +241,7 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
         if (_showDropdown) ...[
           const SizedBox(height: 4),
           Container(
-            constraints: const BoxConstraints(maxHeight: 250),
+            constraints: const BoxConstraints(maxHeight: 300),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
               borderRadius: BorderRadius.circular(12),
@@ -203,21 +270,24 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
                   ),
                 ),
                 Flexible(
-                  child: ListView(
+                  child: ListView.builder(
                     shrinkWrap: true,
-                    children: items
-                        .where((item) => item.name.toLowerCase().contains(_searchController.text.toLowerCase()))
-                        .map((item) {
-                      final isZero = item.currentStock <= 0;
+                    itemCount: filteredItems.length,
+                    itemBuilder: (context, index) {
+                      final item = filteredItems[index];
+                      final reserved = _reservedQuantityFor(item.id);
+                      final availableAfterBatch = item.currentStock - reserved;
+                      final isZero = availableAfterBatch <= 0;
                       return ListTile(
                         dense: true,
                         title: Text(
-                          '${item.name} (${item.currentStock.toStringAsFixed(1)} ${item.unit})',
+                          '${item.name} (${availableAfterBatch.toStringAsFixed(1)} ${item.unit})',
                           style: TextStyle(
                             color: isZero ? Colors.red : null,
                             fontWeight: isZero ? FontWeight.bold : null,
                           ),
                         ),
+                        subtitle: Text(item.category),
                         trailing: isZero
                             ? const Text('OUT', style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold))
                             : null,
@@ -229,7 +299,7 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
                           });
                         },
                       );
-                    }).toList(),
+                    },
                   ),
                 ),
               ],
@@ -240,10 +310,64 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
     );
   }
 
+  Widget _buildPendingDeductions(bool isDark) {
+    if (_pendingDeductions.isEmpty) return const SizedBox.shrink();
+
+    final totalCost = _pendingDeductions.fold<double>(0, (sum, deduction) => sum + deduction.cost);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.green.withValues(alpha: 0.12) : Colors.green.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Pending Deduction List (${_pendingDeductions.length})',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Text('Rs ${totalCost.toStringAsFixed(2)}'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ..._pendingDeductions.asMap().entries.map((entry) {
+            final index = entry.key;
+            final deduction = entry.value;
+            return ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(deduction.item.name),
+              subtitle: Text(deduction.reason),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('${deduction.quantity.toStringAsFixed(1)} ${deduction.item.unit}'),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: _isSaving
+                        ? null
+                        : () => setState(() {
+                              _pendingDeductions.removeAt(index);
+                            }),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTodaySummary(dynamic transactionProvider, bool isDark) {
-    final todayDeductions = transactionProvider.todayTransactions
-        .where((t) => t.type == 'deduction')
-        .toList();
+    final todayDeductions = transactionProvider.todayTransactions.where((t) => t.type == 'deduction').toList();
 
     if (todayDeductions.isEmpty) return const SizedBox.shrink();
 
@@ -255,84 +379,107 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
         color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Today's Deductions: ${todayDeductions.length} items | Rs ${totalCost.toStringAsFixed(2)}",
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-          ),
-        ],
+      child: Text(
+        "Today's Deductions: ${todayDeductions.length} items | Rs ${totalCost.toStringAsFixed(2)}",
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
       ),
     );
   }
 
-  void _saveDeduction() async {
-    if (_selectedItem == null || _quantityController.text.isEmpty) {
+  ItemEntity? _freshItem(ItemEntity item) {
+    return ref.read(inventoryChangeProvider).getItemById(item.id);
+  }
+
+  double _reservedQuantityFor(String itemId) {
+    return _pendingDeductions
+        .where((deduction) => deduction.item.id == itemId)
+        .fold<double>(0, (sum, deduction) => sum + deduction.quantity);
+  }
+
+  bool _addCurrentEntryToBatch() {
+    if (_selectedItem == null || _quantityController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select an item and enter quantity')),
       );
-      return;
+      return false;
     }
 
-    final inventoryProvider = ref.read(inventoryChangeProvider);
-    final item = inventoryProvider.getItemById(_selectedItem!.id) ?? _selectedItem!;
-    final itemName = item.name;
-    final itemUnit = item.unit;
-
-    final quantity = double.tryParse(_quantityController.text) ?? 0;
+    final item = _freshItem(_selectedItem!) ?? _selectedItem!;
+    final quantity = double.tryParse(_quantityController.text.trim()) ?? 0;
     if (quantity <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid quantity')),
       );
-      return;
+      return false;
     }
 
-    if (quantity > item.currentStock) {
+    final reserved = _reservedQuantityFor(item.id);
+    if (quantity + reserved > item.currentStock) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Insufficient stock! Only ${item.currentStock.toStringAsFixed(1)} $itemUnit available.')),
+        SnackBar(content: Text('Insufficient stock! Only ${(item.currentStock - reserved).toStringAsFixed(1)} ${item.unit} available after pending deductions.')),
       );
-      return;
+      return false;
     }
 
-    final cost = quantity * item.unitCost;
-
-    final transaction = TransactionEntity(
-      id: const Uuid().v4(),
-      itemId: item.id,
-      itemName: itemName,
-      quantity: quantity,
-      type: 'deduction',
-      reason: _reasonController.text.trim().isEmpty ? 'Daily Messing' : _reasonController.text.trim(),
-      date: DateTime.now(),
-      cost: cost,
-      unitPrice: item.unitCost,
-    );
-
-    // Reset local selection & form state BEFORE calling async reloads
-    _quantityController.clear();
     setState(() {
+      _pendingDeductions.add(
+        _PendingDeduction(
+          item: item,
+          quantity: quantity,
+          reason: _reasonController.text.trim().isEmpty ? 'Daily Messing' : _reasonController.text.trim(),
+        ),
+      );
       _selectedItem = null;
+      _quantityController.clear();
       _showDropdown = false;
     });
+    return true;
+  }
 
+  void _saveDeductionBatch() async {
+    if (_pendingDeductions.isEmpty && !_addCurrentEntryToBatch()) return;
+
+    final deductions = List<_PendingDeduction>.from(_pendingDeductions);
+    final transactions = deductions
+        .map(
+          (deduction) => TransactionEntity(
+            id: const Uuid().v4(),
+            itemId: deduction.item.id,
+            itemName: deduction.item.name,
+            quantity: deduction.quantity,
+            type: 'deduction',
+            reason: deduction.reason,
+            date: DateTime.now(),
+            cost: deduction.cost,
+            unitPrice: deduction.item.unitCost,
+          ),
+        )
+        .toList();
+
+    setState(() => _isSaving = true);
     try {
-      final success = await ref.read(transactionChangeProvider).addTransaction(transaction);
+      final success = await ref.read(transactionChangeProvider).addTransactions(transactions);
       if (success) {
-        await ref.read(inventoryChangeProvider).loadItems();
-        await ref.read(dashboardChangeProvider).refresh();
-        await ref.read(transactionChangeProvider).loadTodayTransactions();
+        await Future.wait([
+          ref.read(inventoryChangeProvider).loadItems(),
+          ref.read(dashboardChangeProvider).refresh(),
+          ref.read(transactionChangeProvider).loadTodayTransactions(),
+        ]);
         if (mounted) {
+          setState(() {
+            _pendingDeductions.clear();
+            _selectedItem = null;
+            _quantityController.clear();
+            _showDropdown = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Deducted ${quantity.toStringAsFixed(1)} $itemUnit of $itemName')),
+            SnackBar(content: Text('Saved ${transactions.length} daily deduction${transactions.length == 1 ? '' : 's'}')),
           );
         }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to record deduction')),
-          );
-        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to record deduction. Please check stock quantities.')),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -340,14 +487,14 @@ class _DeductionScreenState extends ConsumerState<DeductionScreen> {
           SnackBar(content: Text('Error recording deduction: $e')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   void _generateDailyBillPdf(BuildContext context) async {
     final items = ref.read(inventoryChangeProvider).items;
-    final todayTxns = ref.read(transactionChangeProvider).todayTransactions
-        .where((t) => t.type == 'deduction')
-        .toList();
+    final todayTxns = ref.read(transactionChangeProvider).todayTransactions.where((t) => t.type == 'deduction').toList();
 
     if (todayTxns.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:army_mess_inventory/main.dart';
+import 'package:army_mess_inventory/features/inventory/data/preloaded_inventory_assets.dart';
 import 'package:army_mess_inventory/features/inventory/presentation/widgets/glass_widgets.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/item_entity.dart';
 import 'package:army_mess_inventory/features/inventory/domain/entities/transaction_entity.dart';
 import 'package:uuid/uuid.dart';
+
+enum _StockSortMode { frequent, alphabetical }
 
 class StockListScreen extends ConsumerStatefulWidget {
   const StockListScreen({super.key});
@@ -16,6 +19,8 @@ class StockListScreen extends ConsumerStatefulWidget {
 class _StockListScreenState extends ConsumerState<StockListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  String _selectedCategory = 'All';
+  _StockSortMode _sortMode = _StockSortMode.frequent;
 
   @override
   void initState() {
@@ -23,6 +28,12 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(inventoryChangeProvider).loadItems();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -36,32 +47,14 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => _showAddItemDialog(context),
+            tooltip: 'Add custom item',
+            onPressed: () => _showItemDialog(context),
           ),
         ],
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search items...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-              ),
-              onChanged: (value) => setState(() => _searchQuery = value.toLowerCase()),
-            ),
-          ),
+          _buildSearchAndFilters(inventoryProvider.categories),
           Expanded(
             child: inventoryProvider.isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -74,11 +67,86 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
     );
   }
 
+  Widget _buildSearchAndFilters(List<String> categories) {
+    final allCategories = ['All', ...categories];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        children: [
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Fast search by name or category...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+            ),
+            onChanged: (value) => setState(() => _searchQuery = value.trim().toLowerCase()),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 40,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: allCategories.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final category = allCategories[index];
+                      return ChoiceChip(
+                        label: Text(category),
+                        selected: _selectedCategory == category,
+                        onSelected: (_) => setState(() => _selectedCategory = category),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              DropdownButton<_StockSortMode>(
+                value: _sortMode,
+                underline: const SizedBox.shrink(),
+                items: const [
+                  DropdownMenuItem(value: _StockSortMode.frequent, child: Text('Frequent')),
+                  DropdownMenuItem(value: _StockSortMode.alphabetical, child: Text('A-Z')),
+                ],
+                onChanged: (mode) {
+                  if (mode != null) setState(() => _sortMode = mode);
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildItemList(List<ItemEntity> items, bool isDark) {
     final filteredItems = items.where((item) {
-      return item.name.toLowerCase().contains(_searchQuery) ||
+      final matchesSearch = _searchQuery.isEmpty ||
+          item.name.toLowerCase().contains(_searchQuery) ||
           item.category.toLowerCase().contains(_searchQuery);
+      final matchesCategory = _selectedCategory == 'All' || item.category == _selectedCategory;
+      return matchesSearch && matchesCategory;
     }).toList();
+
+    filteredItems.sort((a, b) {
+      if (_sortMode == _StockSortMode.frequent) {
+        final usageCompare = b.usageCount.compareTo(a.usageCount);
+        if (usageCompare != 0) return usageCompare;
+      }
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
 
     if (filteredItems.isEmpty) {
       return Center(
@@ -97,9 +165,10 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: filteredItems.length,
-      itemExtent: 80,
+      itemExtent: 88,
+      cacheExtent: 900,
       itemBuilder: (context, index) {
         final item = filteredItems[index];
         return _buildItemCard(item, isDark);
@@ -108,26 +177,43 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
   }
 
   Widget _buildItemCard(ItemEntity item, bool isDark) {
-    final bool isLowStock = item.currentStock <= item.reorderLevel;
+    final bool isLowStock = item.reorderLevel > 0 && item.currentStock <= item.reorderLevel;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         leading: CircleAvatar(
-          backgroundColor: isLowStock
-              ? Colors.red.withValues(alpha: 0.15)
-              : Colors.green.withValues(alpha: 0.15),
+          backgroundColor: isLowStock ? Colors.red.withValues(alpha: 0.15) : Colors.green.withValues(alpha: 0.15),
           child: Icon(
             Icons.inventory_2,
             color: isLowStock ? Colors.red : Colors.green,
           ),
         ),
-        title: Text(
-          item.name,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                item.name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: item.isPreloaded ? Colors.blue.withValues(alpha: 0.12) : Colors.purple.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                item.isPreloaded ? 'Asset' : 'Custom',
+                style: TextStyle(fontSize: 10, color: item.isPreloaded ? Colors.blue : Colors.purple),
+              ),
+            ),
+          ],
         ),
-        subtitle: Text('${item.category} | ${item.unit}'),
+        subtitle: Text('${item.category} | ${item.unit} | Used ${item.usageCount}x'),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -140,8 +226,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
                 color: isLowStock ? Colors.red : (isDark ? Colors.white : Colors.black87),
               ),
             ),
-            if (isLowStock)
-              const Text('Low Stock', style: TextStyle(color: Colors.red, fontSize: 10)),
+            if (isLowStock) const Text('Low Stock', style: TextStyle(color: Colors.red, fontSize: 10)),
           ],
         ),
         onTap: () => _showStockBottomSheet(item),
@@ -151,7 +236,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
 
   void _showStockBottomSheet(ItemEntity item) {
     final addQtyCtrl = TextEditingController();
-    final addCostCtrl = TextEditingController();
+    final addCostCtrl = TextEditingController(text: item.unitCost == 0 ? '' : item.unitCost.toString());
     final deductQtyCtrl = TextEditingController();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -207,9 +292,17 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.edit),
+                label: const Text('Edit Item Details'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showItemDialog(context, item: item);
+                },
+              ),
               const SizedBox(height: 20),
 
-              // Add Stock Section
               Text('Add Stock', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.green.shade700)),
               const SizedBox(height: 8),
               Row(
@@ -241,9 +334,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
               ElevatedButton.icon(
                 icon: const Icon(Icons.add),
                 label: const Text('Add Stock'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green.shade700,
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700),
                 onPressed: () => _addStock(ctx, item, addQtyCtrl.text, addCostCtrl.text),
               ),
 
@@ -251,7 +342,6 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
               Divider(color: isDark ? Colors.white24 : Colors.grey.shade300),
               const SizedBox(height: 12),
 
-              // Deduct Stock Section
               Text('Deduct Stock (Manual Correction)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.orange.shade700)),
               const SizedBox(height: 8),
               TextField(
@@ -266,9 +356,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
               ElevatedButton.icon(
                 icon: const Icon(Icons.remove),
                 label: const Text('Deduct Stock'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange.shade700,
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade700),
                 onPressed: () => _deductStock(ctx, item, deductQtyCtrl.text),
               ),
 
@@ -276,12 +364,19 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
               Divider(color: isDark ? Colors.white24 : Colors.grey.shade300),
               const SizedBox(height: 8),
 
-              // Delete item
-              TextButton.icon(
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                label: const Text('Delete Item', style: TextStyle(color: Colors.red)),
-                onPressed: () => _deleteItem(ctx, item),
-              ),
+              if (item.isPreloaded)
+                const ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.lock_outline),
+                  title: Text('Preloaded asset'),
+                  subtitle: Text('Protected assets can be edited but are not deletable by default.'),
+                )
+              else
+                TextButton.icon(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  label: const Text('Delete Custom Item', style: TextStyle(color: Colors.red)),
+                  onPressed: () => _deleteItem(ctx, item),
+                ),
               const SizedBox(height: 16),
             ],
           ),
@@ -372,7 +467,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Item'),
+        title: const Text('Delete Custom Item'),
         content: Text('Are you sure you want to delete "${item.name}"?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -385,84 +480,119 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
     );
 
     if (confirm == true) {
-      await ref.read(inventoryChangeProvider).deleteItem(item.id);
+      final success = await ref.read(inventoryChangeProvider).deleteItem(item.id);
       await ref.read(dashboardChangeProvider).refresh();
       if (mounted) {
         Navigator.pop(ctx);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${item.name} deleted')),
+          SnackBar(content: Text(success ? '${item.name} deleted' : 'This preloaded asset cannot be deleted')),
         );
       }
     }
   }
 
-  void _showAddItemDialog(BuildContext context) {
-    final nameController = TextEditingController();
-    final unitController = TextEditingController();
-    final categoryController = TextEditingController();
-    final reorderController = TextEditingController();
+  void _showItemDialog(BuildContext context, {ItemEntity? item}) {
+    final nameController = TextEditingController(text: item?.name ?? '');
+    final categoryController = TextEditingController(text: item?.category ?? '');
+    final stockController = TextEditingController(text: item == null ? '0' : item.currentStock.toString());
+    final reorderController = TextEditingController(text: item == null ? '' : item.reorderLevel.toString());
+    final unitCostController = TextEditingController(text: item == null || item.unitCost == 0 ? '' : item.unitCost.toString());
+    final availableUnits = {...InventoryCatalog.supportedUnits, if (item != null) item.unit}.toList();
+    String selectedUnit = item?.unit ?? 'Kg';
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add New Item'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Item Name'),
-                textCapitalization: TextCapitalization.words,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: unitController,
-                decoration: const InputDecoration(labelText: 'Unit (e.g., kg, ltr, pkt)'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: categoryController,
-                decoration: const InputDecoration(labelText: 'Category'),
-                textCapitalization: TextCapitalization.words,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: reorderController,
-                decoration: const InputDecoration(labelText: 'Reorder Level'),
-                keyboardType: TextInputType.number,
-              ),
-            ],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(item == null ? 'Add New Item' : 'Edit Item Details'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Item Name'),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: selectedUnit,
+                  decoration: const InputDecoration(labelText: 'Default Unit'),
+                  items: availableUnits.map((unit) => DropdownMenuItem(value: unit, child: Text(unit))).toList(),
+                  onChanged: (unit) {
+                    if (unit != null) setDialogState(() => selectedUnit = unit);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: categoryController,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: stockController,
+                  decoration: const InputDecoration(labelText: 'Opening / Current Stock'),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: reorderController,
+                  decoration: const InputDecoration(labelText: 'Low Stock Threshold'),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: unitCostController,
+                  decoration: const InputDecoration(labelText: 'Cost/Unit (Rs)', prefixText: 'Rs '),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.isEmpty || unitController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Name and Unit are required')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.trim().isEmpty || selectedUnit.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Name and Unit are required')),
+                  );
+                  return;
+                }
+
+                final stock = double.tryParse(stockController.text.trim()) ?? 0;
+                final savedItem = ItemEntity(
+                  id: item?.id ?? const Uuid().v4(),
+                  name: nameController.text.trim(),
+                  unit: selectedUnit.trim(),
+                  category: categoryController.text.trim().isEmpty ? 'General' : categoryController.text.trim(),
+                  currentStock: stock < 0 ? 0 : stock,
+                  reorderLevel: double.tryParse(reorderController.text.trim()) ?? 0,
+                  unitCost: double.tryParse(unitCostController.text.trim()) ?? item?.unitCost ?? 0,
+                  isPreloaded: item?.isPreloaded ?? false,
+                  usageCount: item?.usageCount ?? 0,
+                  assetKey: item?.assetKey,
                 );
-                return;
-              }
-              final newItem = ItemEntity(
-                id: const Uuid().v4(),
-                name: nameController.text.trim(),
-                unit: unitController.text.trim(),
-                category: categoryController.text.trim().isEmpty ? 'General' : categoryController.text.trim(),
-                currentStock: 0,
-                reorderLevel: double.tryParse(reorderController.text) ?? 0,
-              );
-              await ref.read(inventoryChangeProvider).addItem(newItem);
-              await ref.read(dashboardChangeProvider).refresh();
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('Add'),
-          ),
-        ],
+
+                final success = item == null
+                    ? await ref.read(inventoryChangeProvider).addItem(savedItem)
+                    : await ref.read(inventoryChangeProvider).updateItem(savedItem);
+                await ref.read(dashboardChangeProvider).refresh();
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(success ? 'Item saved' : 'Failed to save item')),
+                  );
+                }
+              },
+              child: Text(item == null ? 'Add' : 'Save'),
+            ),
+          ],
+        ),
       ),
     );
   }

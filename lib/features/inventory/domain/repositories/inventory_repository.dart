@@ -16,6 +16,7 @@ abstract class InventoryRepository {
 
   // Transactions (unified)
   Future<Either<Failure, void>> addTransaction(TransactionEntity transaction);
+  Future<Either<Failure, void>> addTransactions(List<TransactionEntity> transactions);
   Future<Either<Failure, List<TransactionEntity>>> getTransactions({String? itemId, String? type, DateTime? startDate, DateTime? endDate});
   Future<Either<Failure, List<TransactionEntity>>> getTodayTransactions();
   Future<Either<Failure, List<TransactionEntity>>> getMonthTransactions(int year, int month);

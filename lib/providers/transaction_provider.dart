@@ -65,7 +65,11 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   Future<bool> addTransaction(TransactionEntity transaction) async {
-    final result = await repository.addTransaction(transaction);
+    return addTransactions([transaction]);
+  }
+
+  Future<bool> addTransactions(List<TransactionEntity> transactions) async {
+    final result = await repository.addTransactions(transactions);
     return await result.fold(
       (failure) async {
         _error = 'Failed to save transaction';

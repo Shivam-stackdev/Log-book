@@ -17,8 +17,14 @@ class InventoryProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
+  List<String> get categories {
+    final values = _items.map((item) => item.category).where((category) => category.trim().isNotEmpty).toSet().toList();
+    values.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return values;
+  }
+
   int get totalItems => _items.length;
-  int get lowStockCount => _items.where((i) => i.currentStock <= i.reorderLevel).length;
+  int get lowStockCount => _items.where((i) => i.reorderLevel > 0 && i.currentStock <= i.reorderLevel).length;
 
   Future<void> loadItems() async {
     _isLoading = true;

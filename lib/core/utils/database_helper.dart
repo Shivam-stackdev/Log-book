@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:army_mess_inventory/features/inventory/data/preloaded_inventory_assets.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -19,8 +20,9 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
   }
 
@@ -34,7 +36,10 @@ class DatabaseHelper {
         category TEXT NOT NULL,
         reorderLevel REAL NOT NULL,
         currentStock REAL DEFAULT 0,
-        unitCost REAL DEFAULT 0
+        unitCost REAL DEFAULT 0,
+        assetKey TEXT,
+        isPreloaded INTEGER NOT NULL DEFAULT 0,
+        usageCount INTEGER NOT NULL DEFAULT 0
       )
     ''');
 
@@ -105,10 +110,99 @@ class DatabaseHelper {
         ocrText TEXT
       )
     ''');
+
+    await _ensureMetadataAndIndexes(db);
+    await _seedPreloadedAssets(db);
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _addColumnIfMissing(db, 'items', 'assetKey', 'TEXT');
+      await _addColumnIfMissing(db, 'items', 'isPreloaded', 'INTEGER NOT NULL DEFAULT 0');
+      await _addColumnIfMissing(db, 'items', 'usageCount', 'INTEGER NOT NULL DEFAULT 0');
+    }
+
+    await _ensureMetadataAndIndexes(db);
+    await _seedPreloadedAssets(db);
+  }
+
+  Future<void> _ensureMetadataAndIndexes(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS app_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_items_category_name ON items(category, name)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_items_usage_name ON items(usageCount DESC, name ASC)');
+    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_items_asset_key ON items(assetKey) WHERE assetKey IS NOT NULL');
+  }
+
+  Future<void> _addColumnIfMissing(Database db, String table, String column, String definition) async {
+    final columns = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = columns.any((row) => row['name'] == column);
+    if (!exists) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+    }
+  }
+
+  Future<void> _seedPreloadedAssets(Database db) async {
+    final itemCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM items')) ?? 0;
+    final meta = await db.query(
+      'app_metadata',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: ['preloaded_assets_initialized'],
+      limit: 1,
+    );
+    final assetsWereInitialized = meta.isNotEmpty && meta.first['value'] == '1';
+
+    // First launch/empty migration receives the complete preloaded catalog.
+    // Existing non-empty databases are left untouched unless this device already
+    // opted into the seeded catalog, which lets future updates add new assets
+    // without duplicating or overwriting user-created inventory.
+    if (itemCount > 0 && !assetsWereInitialized) return;
+
+    await db.transaction((txn) async {
+      for (final asset in InventoryCatalog.assets) {
+        final duplicate = await txn.query(
+          'items',
+          columns: ['id'],
+          where: 'assetKey = ? OR (LOWER(name) = LOWER(?) AND category = ?)',
+          whereArgs: [asset.assetKey, asset.name, asset.category],
+          limit: 1,
+        );
+        if (duplicate.isNotEmpty) continue;
+
+        await txn.insert(
+          'items',
+          {
+            'id': 'preloaded_${asset.assetKey}',
+            'name': asset.name,
+            'unit': asset.unit,
+            'category': asset.category,
+            'reorderLevel': asset.reorderLevel,
+            'currentStock': asset.openingStock,
+            'unitCost': 0,
+            'assetKey': asset.assetKey,
+            'isPreloaded': 1,
+            'usageCount': 0,
+          },
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+
+      await txn.insert(
+        'app_metadata',
+        {'key': 'preloaded_assets_initialized', 'value': '1'},
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
   }
 
   Future close() async {
     final db = await instance.database;
-    db.close();
+    await db.close();
+    _database = null;
   }
 }

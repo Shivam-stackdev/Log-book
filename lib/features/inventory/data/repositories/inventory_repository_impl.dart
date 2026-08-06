@@ -24,7 +24,7 @@ class InventoryRepositoryImpl implements InventoryRepository {
   Future<Either<Failure, List<ItemEntity>>> getItems() async {
     try {
       final db = await dbHelper.database;
-      final result = await db.query('items', orderBy: 'name ASC');
+      final result = await db.query('items', orderBy: 'usageCount DESC, name COLLATE NOCASE ASC');
       return Right(result.map((json) => ItemModel.fromMap(json)).toList());
     } catch (e) {
       return Left(DatabaseFailure());
@@ -73,7 +73,10 @@ class InventoryRepositoryImpl implements InventoryRepository {
   Future<Either<Failure, void>> deleteItem(String id) async {
     try {
       final db = await dbHelper.database;
-      await db.delete('items', where: 'id = ?', whereArgs: [id]);
+      final deletedRows = await db.delete('items', where: 'id = ? AND isPreloaded = 0', whereArgs: [id]);
+      if (deletedRows != 1) {
+        throw StateError('Preloaded inventory assets cannot be deleted');
+      }
       return const Right(null);
     } catch (e) {
       return Left(DatabaseFailure());
@@ -82,36 +85,55 @@ class InventoryRepositoryImpl implements InventoryRepository {
 
   // ─── Transactions ────────────────────────────────────
 
+  Future<void> _insertAndApplyTransaction(dynamic txn, TransactionEntity transaction) async {
+    final model = TransactionModel.fromEntity(transaction);
+    await txn.insert('transactions', model.toMap());
+
+    int updatedRows;
+    if (transaction.type == 'addition') {
+      updatedRows = await txn.rawUpdate(
+        'UPDATE items SET currentStock = currentStock + ?, unitCost = ?, usageCount = usageCount + 1 WHERE id = ?',
+        [transaction.quantity, transaction.unitPrice, transaction.itemId],
+      );
+    } else {
+      // Deduction/party transactions must update the stock row atomically.
+      // If no row is affected, rollback the transaction instead of showing
+      // success while the inventory quantity stays unchanged.
+      updatedRows = await txn.rawUpdate(
+        'UPDATE items SET currentStock = currentStock - ?, usageCount = usageCount + 1 WHERE id = ? AND currentStock >= ?',
+        [transaction.quantity, transaction.itemId, transaction.quantity],
+      );
+    }
+
+    if (updatedRows != 1) {
+      throw StateError('Stock update failed for item ${transaction.itemId}');
+    }
+  }
+
   @override
   Future<Either<Failure, void>> addTransaction(TransactionEntity transaction) async {
     try {
       final db = await dbHelper.database;
-      final model = TransactionModel.fromEntity(transaction);
-
       await db.transaction((txn) async {
-        await txn.insert('transactions', model.toMap());
+        await _insertAndApplyTransaction(txn, transaction);
+      });
+      return const Right(null);
+    } catch (e) {
+      return Left(DatabaseFailure());
+    }
+  }
 
-        int updatedRows;
-        if (transaction.type == 'addition') {
-          updatedRows = await txn.rawUpdate(
-            'UPDATE items SET currentStock = currentStock + ?, unitCost = ? WHERE id = ?',
-            [transaction.quantity, transaction.unitPrice, transaction.itemId],
-          );
-        } else {
-          // Deduction/party transactions must update the stock row atomically.
-          // If no row is affected, rollback the transaction instead of showing
-          // success while the inventory quantity stays unchanged.
-          updatedRows = await txn.rawUpdate(
-            'UPDATE items SET currentStock = currentStock - ? WHERE id = ? AND currentStock >= ?',
-            [transaction.quantity, transaction.itemId, transaction.quantity],
-          );
-        }
+  @override
+  Future<Either<Failure, void>> addTransactions(List<TransactionEntity> transactions) async {
+    if (transactions.isEmpty) return const Right(null);
 
-        if (updatedRows != 1) {
-          throw StateError('Stock update failed for item ${transaction.itemId}');
+    try {
+      final db = await dbHelper.database;
+      await db.transaction((txn) async {
+        for (final transaction in transactions) {
+          await _insertAndApplyTransaction(txn, transaction);
         }
       });
-
       return const Right(null);
     } catch (e) {
       return Left(DatabaseFailure());
@@ -217,10 +239,13 @@ class InventoryRepositoryImpl implements InventoryRepository {
           await txn.insert('party_items', itemModel.toMap());
 
           // Auto-deduct stock and record transaction
-          await txn.execute(
-            'UPDATE items SET currentStock = currentStock - ? WHERE id = ?',
-            [item.quantity, item.itemId],
+          final updatedRows = await txn.rawUpdate(
+            'UPDATE items SET currentStock = currentStock - ?, usageCount = usageCount + 1 WHERE id = ? AND currentStock >= ?',
+            [item.quantity, item.itemId, item.quantity],
           );
+          if (updatedRows != 1) {
+            throw StateError('Stock update failed for item ${item.itemId}');
+          }
 
           // Create a party transaction
           final txModel = TransactionModel(

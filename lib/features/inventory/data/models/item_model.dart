@@ -9,6 +9,9 @@ class ItemModel extends ItemEntity {
     required super.reorderLevel,
     required super.category,
     super.unitCost = 0,
+    super.isPreloaded = false,
+    super.usageCount = 0,
+    super.assetKey,
   });
 
   factory ItemModel.fromMap(Map<String, dynamic> map) {
@@ -20,6 +23,9 @@ class ItemModel extends ItemEntity {
       reorderLevel: (map['reorderLevel'] ?? 0).toDouble(),
       category: map['category'] ?? '',
       unitCost: (map['unitCost'] ?? 0).toDouble(),
+      isPreloaded: (map['isPreloaded'] ?? 0) == 1,
+      usageCount: (map['usageCount'] ?? 0) as int,
+      assetKey: map['assetKey'],
     );
   }
 
@@ -32,6 +38,9 @@ class ItemModel extends ItemEntity {
       'reorderLevel': reorderLevel,
       'category': category,
       'unitCost': unitCost,
+      'isPreloaded': isPreloaded ? 1 : 0,
+      'usageCount': usageCount,
+      'assetKey': assetKey,
     };
   }
 
@@ -44,6 +53,9 @@ class ItemModel extends ItemEntity {
       reorderLevel: entity.reorderLevel,
       category: entity.category,
       unitCost: entity.unitCost,
+      isPreloaded: entity.isPreloaded,
+      usageCount: entity.usageCount,
+      assetKey: entity.assetKey,
     );
   }
 }

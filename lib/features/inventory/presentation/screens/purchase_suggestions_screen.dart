@@ -12,7 +12,7 @@ class PurchaseSuggestionsScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final lowStockItems = inventoryProvider.items
-        .where((item) => item.currentStock <= item.reorderLevel)
+        .where((item) => item.reorderLevel > 0 && item.currentStock <= item.reorderLevel)
         .toList();
 
     // Sort: highest priority (zero stock) first

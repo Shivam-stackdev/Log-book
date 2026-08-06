@@ -8,6 +8,9 @@ class ItemEntity extends Equatable {
   final double reorderLevel;
   final String category;
   final double unitCost;
+  final bool isPreloaded;
+  final int usageCount;
+  final String? assetKey;
 
   const ItemEntity({
     required this.id,
@@ -17,6 +20,9 @@ class ItemEntity extends Equatable {
     required this.reorderLevel,
     required this.category,
     this.unitCost = 0,
+    this.isPreloaded = false,
+    this.usageCount = 0,
+    this.assetKey,
   });
 
   ItemEntity copyWith({
@@ -27,6 +33,9 @@ class ItemEntity extends Equatable {
     double? reorderLevel,
     String? category,
     double? unitCost,
+    bool? isPreloaded,
+    int? usageCount,
+    String? assetKey,
   }) {
     return ItemEntity(
       id: id ?? this.id,
@@ -36,9 +45,12 @@ class ItemEntity extends Equatable {
       reorderLevel: reorderLevel ?? this.reorderLevel,
       category: category ?? this.category,
       unitCost: unitCost ?? this.unitCost,
+      isPreloaded: isPreloaded ?? this.isPreloaded,
+      usageCount: usageCount ?? this.usageCount,
+      assetKey: assetKey ?? this.assetKey,
     );
   }
 
   @override
-  List<Object?> get props => [id, name, unit, currentStock, reorderLevel, category, unitCost];
+  List<Object?> get props => [id, name, unit, currentStock, reorderLevel, category, unitCost, isPreloaded, usageCount, assetKey];
 }
